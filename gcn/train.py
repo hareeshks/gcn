@@ -7,11 +7,6 @@ import tensorflow as tf
 from gcn.utils import *
 from gcn.models import GCN, MLP
 
-# Set random seed
-seed = 123
-np.random.seed(seed)
-tf.set_random_seed(seed)
-
 # Settings
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -25,6 +20,12 @@ flags.DEFINE_float('dropout', 0.5, 'Dropout rate (1 - keep probability).')
 flags.DEFINE_float('weight_decay', 5e-4, 'Weight for L2 loss on embedding matrix.')
 flags.DEFINE_integer('early_stopping', 10, 'Tolerance for early stopping (# of epochs).')
 flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
+flags.DEFINE_integer('random_seed', 123, 'Random seed.')
+
+# Set random seed
+seed = FLAGS.random_seed
+np.random.seed(seed)
+tf.set_random_seed(seed)
 
 # Load data
 adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data(FLAGS.dataset)
