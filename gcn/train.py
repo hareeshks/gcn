@@ -76,7 +76,7 @@ def evaluate(features, support, labels, mask, placeholders):
 sess.run(tf.global_variables_initializer())
 
 cost_val = []
-
+min_cost = float('+inf')
 # Train model
 for epoch in range(FLAGS.epochs):
 
@@ -96,6 +96,12 @@ for epoch in range(FLAGS.epochs):
     print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(outs[1]),
           "train_acc=", "{:.5f}".format(outs[2]), "val_loss=", "{:.5f}".format(cost),
           "val_acc=", "{:.5f}".format(acc), "time=", "{:.5f}".format(time.time() - t))
+
+    if epoch > FLAGS.early_stopping and cost_val[-1] < min_cost:
+        min_cost = cost_val[-1]
+        test_cost, test_acc, test_duration = evaluate(features, support, y_test, test_mask, placeholders)
+        print("Test set results:", "cost=", "{:.5f}".format(test_cost),
+            "accuracy=", "{:.5f}".format(test_acc), "time=", "{:.5f}".format(test_duration))
 
     if epoch > FLAGS.early_stopping and cost_val[-1] > np.mean(cost_val[-(FLAGS.early_stopping+1):-1]):
         print("Early stopping...")
