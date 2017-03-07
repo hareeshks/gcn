@@ -3,8 +3,13 @@ import pickle as pkl
 import networkx as nx
 import scipy.sparse as sp
 from scipy.sparse.linalg.eigen.arpack import eigsh
+from sklearn.feature_extraction.text import TfidfTransformer
+from sklearn.preprocessing import normalize
 import sys
+import tensorflow as tf
 
+flags = tf.app.flags
+FLAGS = flags.FLAGS
 
 def parse_index_file(filename):
     """Parse index file."""
@@ -95,12 +100,19 @@ def sparse_to_tuple(sparse_mx):
 
 
 def preprocess_features(features):
-    """Row-normalize feature matrix and convert to tuple representation"""
-    rowsum = np.array(features.sum(1))
-    r_inv = np.power(rowsum, -1).flatten()
-    r_inv[np.isinf(r_inv)] = 0.
-    r_mat_inv = sp.diags(r_inv)
-    features = r_mat_inv.dot(features)
+    if FLAGS.feature == 'bow':
+        # """Row-normalize feature matrix and convert to tuple representation"""
+        rowsum = np.array(features.sum(1))
+        r_inv = np.power(rowsum, -1).flatten()
+        r_inv[np.isinf(r_inv)] = 0.
+        r_mat_inv = sp.diags(r_inv)
+        features = r_mat_inv.dot(features)
+        # normalize(features, norm='l1', axis=1, copy=False)
+    elif FLAGS.feature == 'tfidf':
+        transformer = TfidfTransformer(norm=None, use_idf=True, smooth_idf=True, sublinear_tf=False)
+        features = transformer.fit_transform(features)
+    else:
+        raise ValueError('Invalid argument for feature: ' + str(FLAGS.feature))
     return sparse_to_tuple(features)
 
 

@@ -21,6 +21,7 @@ flags.DEFINE_float('weight_decay', 5e-4, 'Weight for L2 loss on embedding matrix
 flags.DEFINE_integer('early_stopping', 10, 'Tolerance for early stopping (# of epochs).')
 flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
 flags.DEFINE_integer('random_seed', 123, 'Random seed.')
+flags.DEFINE_string('feature', 'bow', 'bow (bag of words) or tfidf.')
 
 # Set random seed
 seed = FLAGS.random_seed
