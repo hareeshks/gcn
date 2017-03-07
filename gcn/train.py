@@ -76,7 +76,7 @@ def evaluate(features, support, labels, mask, placeholders):
 sess.run(tf.global_variables_initializer())
 
 cost_val = []
-acc = 0
+max_acc = 0
 # Train model
 for epoch in range(FLAGS.epochs):
 
