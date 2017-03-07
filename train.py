@@ -10,8 +10,8 @@ from gcn.models import GCN, MLP
 # Settings
 flags = tf.app.flags
 FLAGS = flags.FLAGS
-flags.DEFINE_string('dataset', 'cora', 'Dataset string.')  # 'cora', 'citeseer', 'pubmed'
-flags.DEFINE_string('model', 'gcn', 'Model string.')  # 'gcn', 'gcn_cheby', 'dense'
+flags.DEFINE_string('dataset', 'cora', 'Dataset string. (cora | citeseer | pubmed)')  # 'cora', 'citeseer', 'pubmed'
+flags.DEFINE_string('model', 'gcn', 'Model string. (gcn | gcn_cheby | dense)')  # 'gcn', 'gcn_cheby', 'dense'
 flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate.')
 flags.DEFINE_integer('epochs', 200, 'Number of epochs to train.')
 flags.DEFINE_integer('hidden_nodes', 16, 'Number of nodes in each hidden layer.')
