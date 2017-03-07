@@ -111,14 +111,22 @@ class MLP(Model):
 
     def _build(self):
         self.layers.append(Dense(input_dim=self.input_dim,
-                                 output_dim=FLAGS.hidden1,
+                                 output_dim=FLAGS.hidden_nodes,
                                  placeholders=self.placeholders,
                                  act=tf.nn.relu,
                                  dropout=True,
                                  sparse_inputs=True,
                                  logging=self.logging))
 
-        self.layers.append(Dense(input_dim=FLAGS.hidden1,
+        for i in range(FLAGS.hidden_layers-1):
+            self.layers.append(GraphConvolution(input_dim=FLAGS.hidden_nodes,
+                                                output_dim=FLAGS.hidden_nodes,
+                                                placeholders=self.placeholders,
+                                                act=tf.nn.relu,
+                                                dropout=True,
+                                                logging=self.logging))
+
+        self.layers.append(Dense(input_dim=FLAGS.hidden_nodes,
                                  output_dim=self.output_dim,
                                  placeholders=self.placeholders,
                                  act=lambda x: x,
@@ -165,6 +173,7 @@ class GCN(Model):
                                             dropout=True,
                                             sparse_inputs=True,
                                             logging=self.logging))
+
         for i in range(FLAGS.hidden_layers-1):
             self.layers.append(GraphConvolution(input_dim=FLAGS.hidden_nodes,
                                                 output_dim=FLAGS.hidden_nodes,

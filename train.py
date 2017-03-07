@@ -103,7 +103,9 @@ for epoch in range(FLAGS.epochs):
         print("Test set results:", "cost=", "{:.5f}".format(test_cost),
             "accuracy=", "{:.5f}".format(test_acc), "time=", "{:.5f}".format(test_duration))
 
-    if epoch > FLAGS.early_stopping and cost_val[-1] > np.mean(cost_val[-(FLAGS.early_stopping+1):-1]):
+    if FLAGS.early_stopping > 0 \
+        and epoch > FLAGS.early_stopping \
+        and cost_val[-1] > np.mean(cost_val[-(FLAGS.early_stopping+1):-1]):
         print("Early stopping...")
         break
 
