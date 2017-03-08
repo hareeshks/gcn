@@ -22,6 +22,7 @@ flags.DEFINE_integer('early_stopping', 10, 'Tolerance for early stopping (# of e
 flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
 flags.DEFINE_integer('random_seed', 123, 'Random seed.')
 flags.DEFINE_string('feature', 'bow', 'bow (bag of words) or tfidf.')
+flags.DEFINE_string('logdir', './log', 'Log directory. Default is "./log"')
 
 # Set random seed
 seed = FLAGS.random_seed
@@ -58,26 +59,32 @@ placeholders = {
     'num_features_nonzero': tf.placeholder(tf.int32)  # helper variable for sparse dropout
 }
 
-# Create model
-model = model_func(placeholders, input_dim=features[2][1], logging=True)
 
 # Initialize session
 sess = tf.Session()
+
+# Create model
+model = model_func(placeholders, input_dim=features[2][1], logging=False)
+
+# Initialize summary
+merged = tf.summary.merge_all(tf.GraphKeys.SUMMARIES)
+train_writer = tf.summary.FileWriter(FLAGS.logdir + '/train', sess.graph)
+valid_writer = tf.summary.FileWriter(FLAGS.logdir + '/valid')
 
 
 # Define model evaluation function
 def evaluate(features, support, labels, mask, placeholders):
     t_test = time.time()
     feed_dict_val = construct_feed_dict(features, support, labels, mask, placeholders)
-    outs_val = sess.run([model.loss, model.accuracy], feed_dict=feed_dict_val)
-    return outs_val[0], outs_val[1], (time.time() - t_test)
+    outs_val = sess.run([model.loss, model.accuracy, merged], feed_dict=feed_dict_val)
+    return outs_val[0], outs_val[1], (time.time() - t_test), outs_val[2]
 
 
 # Init variables
 sess.run(tf.global_variables_initializer())
 
-cost_val = []
-max_acc = 0
+valid_loss_list = []
+max_valid_acc = 0
 # Train model
 for epoch in range(FLAGS.epochs):
 
@@ -87,32 +94,35 @@ for epoch in range(FLAGS.epochs):
     feed_dict.update({placeholders['dropout']: FLAGS.dropout})
 
     # Training step
-    outs = sess.run([model.opt_op, model.loss, model.accuracy], feed_dict=feed_dict)
+    sess.run(model.opt_op, feed_dict=feed_dict)
+    train_loss, train_acc, train_summary = sess.run(
+        [model.loss, model.accuracy, merged], feed_dict=feed_dict)
+    train_writer.add_summary(train_summary, epoch)
 
     # Validation
-    cost, acc, duration = evaluate(features, support, y_val, val_mask, placeholders)
-    cost_val.append(cost)
+    valid_loss, valid_acc, valid_duration, valid_summary = evaluate(features, support, y_val, val_mask, placeholders)
+    valid_loss_list.append(valid_loss)
+    valid_writer.add_summary(valid_summary, epoch)
 
     # Print results
-    print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(outs[1]),
-          "train_acc=", "{:.5f}".format(outs[2]), "val_loss=", "{:.5f}".format(cost),
-          "val_acc=", "{:.5f}".format(acc), "time=", "{:.5f}".format(time.time() - t))
+    print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(train_loss),
+          "train_acc=", "{:.5f}".format(train_acc), "val_loss=", "{:.5f}".format(valid_loss),
+          "val_acc=", "{:.5f}".format(valid_acc), "time=", "{:.5f}".format(time.time() - t))
 
-    if epoch > FLAGS.early_stopping and acc > max_acc:
-        max_acc = acc
-        test_cost, test_acc, test_duration = evaluate(features, support, y_test, test_mask, placeholders)
+    if epoch > FLAGS.early_stopping and valid_acc > max_valid_acc:
+        max_valid_acc = valid_acc
+        test_cost, test_acc, test_duration, _ = evaluate(features, support, y_test, test_mask, placeholders)
         print("Test set results:", "cost=", "{:.5f}".format(test_cost),
-            "accuracy=", "{:.5f}".format(test_acc), "time=", "{:.5f}".format(test_duration))
+              "accuracy=", "{:.5f}".format(test_acc), "time=", "{:.5f}".format(test_duration))
 
-    if FLAGS.early_stopping > 0 \
-        and epoch > FLAGS.early_stopping \
-        and cost_val[-1] > np.mean(cost_val[-(FLAGS.early_stopping+1):-1]):
+    if 0 < FLAGS.early_stopping < epoch \
+            and valid_loss_list[-1] > np.mean(valid_loss_list[-(FLAGS.early_stopping + 1):-1]):
         print("Early stopping...")
         break
 
 print("Optimization Finished!")
 
 # Testing
-test_cost, test_acc, test_duration = evaluate(features, support, y_test, test_mask, placeholders)
+test_cost, test_acc, test_duration, _ = evaluate(features, support, y_test, test_mask, placeholders)
 print("Test set results:", "cost=", "{:.5f}".format(test_cost),
       "accuracy=", "{:.5f}".format(test_acc), "time=", "{:.5f}".format(test_duration))

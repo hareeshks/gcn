@@ -78,8 +78,9 @@ class Layer(object):
             return outputs
 
     def _log_vars(self):
-        for var in self.vars:
-            tf.summary.histogram(self.name + '/vars/' + var, self.vars[var])
+        pass
+        # for var in self.vars:
+        #     tf.summary.histogram(self.name + '/vars/' + var, self.vars[var])
 
 
 class Dense(Layer):

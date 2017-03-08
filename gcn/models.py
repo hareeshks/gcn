@@ -53,7 +53,9 @@ class Model(object):
 
         # Build metrics
         self._loss()
+        tf.summary.scalar('loss', self.loss)
         self._accuracy()
+        tf.summary.scalar('accuracy', self.accuracy)
 
         self.opt_op = self.optimizer.minimize(self.loss)
 
