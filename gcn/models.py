@@ -121,7 +121,7 @@ class MLP(Model):
                                  logging=self.logging))
 
         for i in range(FLAGS.hidden_layers-1):
-            self.layers.append(GraphConvolution(input_dim=FLAGS.hidden_nodes,
+            self.layers.append(Dense(input_dim=FLAGS.hidden_nodes,
                                                 output_dim=FLAGS.hidden_nodes,
                                                 placeholders=self.placeholders,
                                                 act=tf.nn.relu,
