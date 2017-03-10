@@ -7,6 +7,9 @@ import tensorflow as tf
 from gcn.utils import *
 from gcn.models import GCN, MLP
 
+from multiprocessing import cpu_count
+from time import time
+
 # Settings
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -20,9 +23,11 @@ flags.DEFINE_float('dropout', 0.5, 'Dropout rate (1 - keep probability).')
 flags.DEFINE_float('weight_decay', 5e-4, 'Weight for L2 loss on embedding matrix.')
 flags.DEFINE_integer('early_stopping', 10, 'Tolerance for early stopping (# of epochs).')
 flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
-flags.DEFINE_integer('random_seed', 123, 'Random seed.')
+flags.DEFINE_integer('random_seed', int(time()), 'Random seed.')
 flags.DEFINE_string('feature', 'bow', 'bow (bag of words) or tfidf.')
 flags.DEFINE_string('logdir', '', 'Log directory. Default is ""')
+flags.DEFINE_integer('threads',cpu_count(), 'Number of threads')
+flags.DEFINE_integer('train_size', 5, 'use x% data to train model') 
 
 # Set random seed
 seed = FLAGS.random_seed
@@ -61,7 +66,8 @@ placeholders = {
 
 
 # Initialize session
-sess = tf.Session()
+sess = tf.Session(config=tf.ConfigProto(
+  intra_op_parallelism_threads=FLAGS.threads))
 
 # Create model
 model = model_func(placeholders, input_dim=features[2][1], logging=False)
@@ -107,7 +113,7 @@ for epoch in range(FLAGS.epochs):
     if FLAGS.logdir:
         train_writer.add_summary(train_summary, epoch)
         valid_writer.add_summary(valid_summary, epoch)
-        
+
     # Print results
     print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(train_loss),
           "train_acc=", "{:.5f}".format(train_acc), "val_loss=", "{:.5f}".format(valid_loss),
