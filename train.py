@@ -22,7 +22,7 @@ flags.DEFINE_integer('early_stopping', 10, 'Tolerance for early stopping (# of e
 flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
 flags.DEFINE_integer('random_seed', 123, 'Random seed.')
 flags.DEFINE_string('feature', 'bow', 'bow (bag of words) or tfidf.')
-flags.DEFINE_string('logdir', './log', 'Log directory. Default is "./log"')
+flags.DEFINE_string('logdir', '', 'Log directory. Default is ""')
 
 # Set random seed
 seed = FLAGS.random_seed
@@ -68,8 +68,9 @@ model = model_func(placeholders, input_dim=features[2][1], logging=False)
 
 # Initialize summary
 merged = tf.summary.merge_all(tf.GraphKeys.SUMMARIES)
-train_writer = tf.summary.FileWriter(FLAGS.logdir + '/train', sess.graph)
-valid_writer = tf.summary.FileWriter(FLAGS.logdir + '/valid')
+if FLAGS.logdir:
+    train_writer = tf.summary.FileWriter(FLAGS.logdir + '/train', sess.graph)
+    valid_writer = tf.summary.FileWriter(FLAGS.logdir + '/valid')
 
 
 # Define model evaluation function
@@ -97,13 +98,16 @@ for epoch in range(FLAGS.epochs):
     sess.run(model.opt_op, feed_dict=feed_dict)
     train_loss, train_acc, train_summary = sess.run(
         [model.loss, model.accuracy, merged], feed_dict=feed_dict)
-    train_writer.add_summary(train_summary, epoch)
 
     # Validation
     valid_loss, valid_acc, valid_duration, valid_summary = evaluate(features, support, y_val, val_mask, placeholders)
     valid_loss_list.append(valid_loss)
-    valid_writer.add_summary(valid_summary, epoch)
 
+    # Logging
+    if FLAGS.logdir:
+        train_writer.add_summary(train_summary, epoch)
+        valid_writer.add_summary(valid_summary, epoch)
+        
     # Print results
     print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(train_loss),
           "train_acc=", "{:.5f}".format(train_acc), "val_loss=", "{:.5f}".format(valid_loss),
