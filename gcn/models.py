@@ -1,17 +1,14 @@
-from gcn.layers import *
-from gcn.metrics import *
+from gcn.layers import Dense, GraphConvolution
+from gcn.metrics import masked_accuracy, masked_softmax_cross_entropy
+import tensorflow as tf
 
-flags = tf.app.flags
-FLAGS = flags.FLAGS
-
-
-class Model(object):
-    def __init__(self, placeholders, input_dim, name=None):
-        if not name:
-            name = self.__class__.__name__.lower()
-
-        self.name = name
-        self.logging = True if FLAGS.logdir else False
+class GCN_MLP(object):
+    def __init__(self, model_config, placeholders, input_dim):
+        self.model_config = model_config
+        self.name = model_config['name']
+        if not self.name:
+            self.name = self.__class__.__name__.lower()
+        self.logging = True if self.model_config['logdir'] else False
 
         self.vars = {}
         self.layers = []
@@ -29,12 +26,29 @@ class Model(object):
         self.accuracy = 0
         self.optimizer = None
         self.opt_op = None
-        self.optimizer = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
+        self.optimizer = tf.train.AdamOptimizer(learning_rate=self.model_config['learning_rate'])
 
         self.build()
 
     def _build(self):
-        raise NotImplementedError
+        self.model_config['connection'] = list(map(
+            lambda x: {'c': GraphConvolution, 'd': Dense}.get(x),
+            self.model_config['connection']))
+        self.model_config['layer_size'].insert(0, self.input_dim)
+        self.model_config['layer_size'].append(self.output_dim)
+        sparse = True
+        for input_dim, output_dim, layer_cls in \
+                zip(self.model_config['layer_size'][:-1],
+                    self.model_config['layer_size'][1:],
+                    self.model_config['connection']):
+            self.layers.append(layer_cls(input_dim=input_dim,
+                                         output_dim=output_dim,
+                                         placeholders=self.placeholders,
+                                         act=self.act,
+                                         dropout=True,
+                                         sparse_inputs=sparse,
+                                         logging=self.logging))
+            sparse = False
 
     def build(self):
         """ Wrapper for _build() """
@@ -69,7 +83,7 @@ class Model(object):
         # Weight decay loss
         for layer in self.layers:
             for var in layer.vars.values():
-                self.loss += FLAGS.weight_decay * tf.nn.l2_loss(var)
+                self.loss += self.model_config['weight_decay'] * tf.nn.l2_loss(var)
         # Cross entropy error
         self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
                                                   self.placeholders['labels_mask'])
@@ -92,96 +106,3 @@ class Model(object):
         save_path = "tmp/%s.ckpt" % self.name
         saver.restore(sess, save_path)
         print("Model restored from file: %s" % save_path)
-
-
-# class MLP(Model):
-#     def _build(self):
-#         self.layers.append(Dense(input_dim=self.input_dim,
-#                                  output_dim=FLAGS.hidden_nodes,
-#                                  placeholders=self.placeholders,
-#                                  act=tf.nn.relu,
-#                                  dropout=True,
-#                                  sparse_inputs=True,
-#                                  logging=self.logging))
-#
-#         for i in range(FLAGS.hidden_layers-1):
-#             self.layers.append(Dense(input_dim=FLAGS.hidden_nodes,
-#                                                 output_dim=FLAGS.hidden_nodes,
-#                                                 placeholders=self.placeholders,
-#                                                 act=tf.nn.relu,
-#                                                 dropout=True,
-#                                                 logging=self.logging))
-#
-#         self.layers.append(Dense(input_dim=FLAGS.hidden_nodes,
-#                                  output_dim=self.output_dim,
-#                                  placeholders=self.placeholders,
-#                                  act=lambda x: x,
-#                                  dropout=True,
-#                                  logging=self.logging))
-#
-#
-# class GCN(Model):
-#     def _build(self):
-#         self.layers.append(GraphConvolution(input_dim=self.input_dim,
-#                                             output_dim=FLAGS.hidden_nodes,
-#                                             placeholders=self.placeholders,
-#                                             act=tf.nn.relu,
-#                                             dropout=True,
-#                                             sparse_inputs=True,
-#                                             logging=self.logging))
-#
-#         for i in range(FLAGS.hidden_layers-1):
-#             self.layers.append(GraphConvolution(input_dim=FLAGS.hidden_nodes,
-#                                                 output_dim=FLAGS.hidden_nodes,
-#                                                 placeholders=self.placeholders,
-#                                                 act=tf.nn.relu,
-#                                                 dropout=True,
-#                                                 logging=self.logging))
-#
-#         self.layers.append(GraphConvolution(input_dim=FLAGS.hidden_nodes,
-#                                             output_dim=self.output_dim,
-#                                             placeholders=self.placeholders,
-#                                             act=lambda x: x,
-#                                             dropout=True,
-#                                             logging=self.logging))
-class GCN_MLP(Model):
-    def _build(self):
-        FLAGS.connection = list(map(
-            lambda x: {'c': GraphConvolution, 'd': Dense}.get(x),
-            FLAGS.connection))
-        FLAGS.layer_size.insert(0, self.input_dim)
-        FLAGS.layer_size.append(self.output_dim)
-        sparse = True
-        for input_dim, output_dim, layer_cls in \
-                zip(FLAGS.layer_size[:-1], FLAGS.layer_size[1:], FLAGS.connection):
-            self.layers.append(layer_cls(input_dim=input_dim,
-                                         output_dim=output_dim,
-                                         placeholders=self.placeholders,
-                                         act=self.act,
-                                         dropout=True,
-                                         sparse_inputs=sparse,
-                                         logging=self.logging))
-            sparse = False
-            #
-            # self.layers.append(GraphConvolution(input_dim=self.input_dim,
-            #                                     output_dim=FLAGS.hidden_nodes,
-            #                                     placeholders=self.placeholders,
-            #                                     act=tf.nn.relu,
-            #                                     dropout=True,
-            #                                     sparse_inputs=True,
-            #                                     logging=self.logging))
-            #
-            # for i in range(FLAGS.hidden_layers - 1):
-            #     self.layers.append(GraphConvolution(input_dim=FLAGS.hidden_nodes,
-            #                                         output_dim=FLAGS.hidden_nodes,
-            #                                         placeholders=self.placeholders,
-            #                                         act=tf.nn.relu,
-            #                                         dropout=True,
-            #                                         logging=self.logging))
-            #
-            # self.layers.append(GraphConvolution(input_dim=FLAGS.hidden_nodes,
-            #                                     output_dim=self.output_dim,
-            #                                     placeholders=self.placeholders,
-            #                                     act=lambda x: x,
-            #                                     dropout=True,
-            #                                     logging=self.logging))

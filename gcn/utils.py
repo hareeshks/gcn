@@ -8,9 +8,6 @@ from sklearn.preprocessing import normalize
 import sys
 import tensorflow as tf
 
-flags = tf.app.flags
-FLAGS = flags.FLAGS
-
 def parse_index_file(filename):
     """Parse index file."""
     index = []
@@ -26,7 +23,7 @@ def sample_mask(idx, l):
     return np.array(mask, dtype=np.bool)
 
 
-def load_data(dataset_str):
+def load_data(dataset_str, train_size):
     """Load data."""
     names = ['x', 'y', 'tx', 'ty', 'allx', 'ally', 'graph']
     objects = []
@@ -61,7 +58,7 @@ def load_data(dataset_str):
 
     idx = np.arange(len(labels))
     np.random.shuffle(idx)
-    idx_train = idx[0:len(idx)*tf.app.flags.FLAGS.train_size//100]
+    idx_train = idx[0:len(idx)*train_size//100]
     idx_val = idx[len(idx)*3//5:len(idx)*4//5]
     idx_test = idx[len(idx)*4//5:len(idx)]
 
@@ -98,8 +95,8 @@ def sparse_to_tuple(sparse_mx):
     return sparse_mx
 
 
-def preprocess_features(features):
-    if FLAGS.feature == 'bow':
+def preprocess_features(features, feature_type):
+    if feature_type == 'bow':
         # """Row-normalize feature matrix and convert to tuple representation"""
         rowsum = np.array(features.sum(1))
         r_inv = np.power(rowsum, -1).flatten()
@@ -107,11 +104,11 @@ def preprocess_features(features):
         r_mat_inv = sp.diags(r_inv)
         features = r_mat_inv.dot(features)
         # normalize(features, norm='l1', axis=1, copy=False)
-    elif FLAGS.feature == 'tfidf':
+    elif feature_type == 'tfidf':
         transformer = TfidfTransformer(norm=None, use_idf=True, smooth_idf=True, sublinear_tf=False)
         features = transformer.fit_transform(features)
     else:
-        raise ValueError('Invalid argument for feature: ' + str(FLAGS.feature))
+        raise ValueError('Invalid feature type: ' + str(feature_type))
     return sparse_to_tuple(features)
 
 
