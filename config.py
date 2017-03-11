@@ -34,13 +34,17 @@ configuration ={
     },
     'model_list':[
         {
-            'logdir'    : '',
-            'conv'      : 'cheby',
-            'connection': 'cd',
+            'name'      : 'c16c',
+            'logdir'    : 'log/c16c',
+            'connection': 'cc',
             'layer_size': [16],
-            'max_degree': 4,
-            'train_size': 10
-        }
+        },
+        {
+            'name'      : 'd16d16d',
+            'logdir'    : 'log/d16d16d',
+            'connection': 'ddd',
+            'layer_size': [16,16],
+        },
     ]
 }
 def set_default_attr(model):
