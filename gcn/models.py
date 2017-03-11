@@ -29,38 +29,36 @@ class GCN_MLP(object):
         self.optimizer = tf.train.AdamOptimizer(learning_rate=self.model_config['learning_rate'])
 
         self.build()
+        return
 
-    def _build(self):
+    def build(self):
         self.model_config['connection'] = list(map(
             lambda x: {'c': GraphConvolution, 'd': Dense}.get(x),
             self.model_config['connection']))
         self.model_config['layer_size'].insert(0, self.input_dim)
         self.model_config['layer_size'].append(self.output_dim)
         sparse = True
-        for input_dim, output_dim, layer_cls in \
-                zip(self.model_config['layer_size'][:-1],
-                    self.model_config['layer_size'][1:],
-                    self.model_config['connection']):
-            self.layers.append(layer_cls(input_dim=input_dim,
-                                         output_dim=output_dim,
-                                         placeholders=self.placeholders,
-                                         act=self.act,
-                                         dropout=True,
-                                         sparse_inputs=sparse,
-                                         logging=self.logging))
-            sparse = False
-
-    def build(self):
-        """ Wrapper for _build() """
         with tf.name_scope(self.name):
-            self._build()  # read layer configuration
+            # create Variables 
+            for input_dim, output_dim, layer_cls in \
+                    zip(self.model_config['layer_size'][:-1],
+                        self.model_config['layer_size'][1:],
+                        self.model_config['connection']):
+                self.layers.append(layer_cls(input_dim=input_dim,
+                                             output_dim=output_dim,
+                                             placeholders=self.placeholders,
+                                             act=self.act,
+                                             dropout=True,
+                                             sparse_inputs=sparse,
+                                             logging=self.logging))
+                sparse = False
 
-        # Build sequential layer model
-        self.activations.append(self.inputs)
-        for layer in self.layers:
-            hidden = layer(self.activations[-1])  # build the graph, give layer inputs, return layer outpus
-            self.activations.append(hidden)
-        self.outputs = self.activations[-1]
+            # Build sequential layer model
+            self.activations.append(self.inputs)
+            for layer in self.layers:
+                hidden = layer(self.activations[-1])  # build the graph, give layer inputs, return layer outpus
+                self.activations.append(hidden)
+            self.outputs = self.activations[-1]
 
         # Store model variables for easy access
         variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.name)

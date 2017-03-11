@@ -7,6 +7,7 @@ from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.preprocessing import normalize
 import sys
 import tensorflow as tf
+from os import path
 
 def parse_index_file(filename):
     """Parse index file."""
@@ -160,3 +161,41 @@ def chebyshev_polynomials(adj, k):
         t_k.append(chebyshev_recurrence(t_k[-1], t_k[-2], scaled_laplacian))
 
     return sparse_to_tuple(t_k)
+
+
+def preprocess_model_config(model_config):
+    model_config['connection'] = list(model_config['connection'])
+    # judge if parameters are legal
+    for c in model_config['connection']:
+        if c not in ['c', 'd']:
+            raise ValueError(
+                'connection string specified by --connection can only contain "c" or "d", but "{}" found' % c)
+    for i in model_config['layer_size']:
+        if not isinstance(i, int):
+            raise ValueError('layer_size should be a list of int, but found {}' % model_config['layer_size'])
+        if i <= 0:
+            raise ValueError('layer_size must be greater than 0, but found {}' % i)
+    if not len(model_config['connection']) == len(model_config['layer_size']) + 1:
+        raise ValueError('length of connection string should be equal to length of layer_size list plus 1')
+
+    # Generate name
+    if not model_config['name']:
+        model_name = model_config['connection'][0]
+        for char, size in \
+            zip(model_config['connection'][1:], model_config['layer_size']):
+            model_name += str(size) + char
+        if model_config['conv'] == 'cheby':
+            model_name += '_cheby' + str(model_config['max_degree'])
+        model_config['name'] = model_name
+
+    # Generate logdir
+    if model_config['logging'] and not model_config['logdir']:
+        train_size = '{:.2f}_train'.format(model_config['train_size']/100)
+        i = 0
+        while True:
+            logdir = path.join('log', model_config['dataset'],
+                train_size, model_config['name'], 'run'+ str(i))
+            i += 1
+            if not path.exists(logdir):
+                break
+        model_config['logdir'] = logdir
