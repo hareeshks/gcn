@@ -3,12 +3,15 @@ from __future__ import print_function
 
 import time
 import tensorflow as tf
-
-from gcn.utils import *
+import numpy as np
+from os import path
+from gcn.utils import construct_feed_dict, preprocess_features, preprocess_adj, chebyshev_polynomials, load_data
 from gcn.models import GCN_MLP
 
 from config import configuration
 import argparse
+
+# TODO: add check point
 
 args = None
 
@@ -22,7 +25,7 @@ def train(model_config):
         'learning_rate  : {}'.format(model_config['learning_rate']),
         'feature        : {}'.format(model_config['feature']),
         'logging        : {}'.format(model_config['logging']),
-        'training...', sep='\n')
+        sep='\n')
 
     # Load data
     adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = \
@@ -53,12 +56,24 @@ def train(model_config):
     # Create model
     model = GCN_MLP(model_config, placeholders, input_dim=features[2][1])
 
-    # Initialize summary
-    merged = tf.summary.merge_all(tf.GraphKeys.SUMMARIES)
+    # Initialize FileWriter, saver & variables in graph
     train_writer = None
     valid_writer = None
+    saver = None
     if model_config['logdir']:
-        train_writer = tf.summary.FileWriter(model_config['logdir'] + '/train', sess.graph)
+        saver = tf.train.Saver()
+        ckpt = tf.train.get_checkpoint_state(model_config['logdir'])
+        if ckpt and ckpt.model_checkpoint_path:
+            # Read from checkpoint
+            print('load model from "{}"...'.format(ckpt.model_checkpoint_path))
+            saver.restore(sess, ckpt.model_checkpoint_path)
+            graph = None
+        else:
+            # Random initialize
+            print('Random initialize variables...')
+            sess.run(tf.global_variables_initializer())
+            graph = sess.graph
+        train_writer = tf.summary.FileWriter(model_config['logdir'] + '/train', graph=graph)
         valid_writer = tf.summary.FileWriter(model_config['logdir'] + '/valid')
 
     # Construct feed dictionary
@@ -67,47 +82,57 @@ def train(model_config):
     valid_feed_dict = construct_feed_dict(features, support, y_val, val_mask, placeholders)
     test_feed_dict = construct_feed_dict(features, support, y_test, test_mask, placeholders)
 
-    # Init variables
-    sess.run(tf.global_variables_initializer())
+    # Some support variables
     valid_loss_list = []
     max_valid_acc = 0
     t_test = time.time()
-    test_cost, test_acc = sess.run([model.loss, model.accuracy], feed_dict=test_feed_dict)
+    test_cost, test_acc = sess.run(
+        [model.loss, model.accuracy],
+        feed_dict=test_feed_dict)
     test_duration = time.time() - t_test
 
     # Train model
-    for epoch in range(model_config['epochs']):
-
+    print('training...')
+    for step in range(model_config['epochs']):
         t = time.time()
 
         # Training step
         sess.run(model.opt_op, feed_dict=train_feed_dict)
         train_loss, train_acc, train_summary = sess.run(
-            [model.loss, model.accuracy, merged], feed_dict=train_feed_dict)
+            [model.loss, model.accuracy, model.summary],
+            feed_dict=train_feed_dict)
 
         # Validation
-        valid_loss, valid_acc, valid_summary= sess.run([model.loss, model.accuracy, merged], feed_dict=valid_feed_dict)
+        valid_loss, valid_acc, valid_summary= sess.run(
+            [model.loss, model.accuracy, model.summary],
+            feed_dict=valid_feed_dict)
         valid_loss_list.append(valid_loss)
 
         # Logging
+        global_step = model.global_step.eval(session=sess)
         if model_config['logdir']:
-            train_writer.add_summary(train_summary, epoch)
-            valid_writer.add_summary(valid_summary, epoch)
+            train_writer.add_summary(train_summary, global_step)
+            valid_writer.add_summary(valid_summary, global_step)
 
         # If it's best performence so far, evalue on test set
         if valid_acc > max_valid_acc:
             max_valid_acc = valid_acc
             t_test = time.time()
-            test_cost, test_acc = sess.run([model.loss, model.accuracy], feed_dict=test_feed_dict)
+            test_cost, test_acc = sess.run(
+                [model.loss, model.accuracy],
+                feed_dict=test_feed_dict)
             test_duration = time.time() - t_test
 
         # Print results
         if args.verbose:
-            print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(train_loss),
-                  "train_acc=", "{:.5f}".format(train_acc), "val_loss=", "{:.5f}".format(valid_loss),
-                  "val_acc=", "{:.5f}".format(valid_acc), "time=", "{:.5f}".format(time.time() - t))
+            print(  "Epoch: {:04d}".format(global_step),
+                    "train_loss= {:.3f}".format(train_loss),
+                    "train_acc= {:.3f}".format(train_acc),
+                    "val_loss=", "{:.3f}".format(valid_loss),
+                    "val_acc= {:.3f}".format(valid_acc),
+                    "time=", "{:.5f}".format(time.time() - t))
 
-        if 0 < model_config['early_stopping'] < epoch \
+        if 0 < model_config['early_stopping'] < global_step \
                 and valid_loss_list[-1] > np.mean(valid_loss_list[-(model_config['early_stopping'] + 1):-1]):
             print("Early stopping...")
             break
@@ -118,6 +143,11 @@ def train(model_config):
     print("Test set results:", "cost=", "{:.5f}".format(test_cost),
           "accuracy=", "{:.5f}".format(test_acc), "time=", "{:.5f}".format(test_duration))
 
+    # Saving
+    print('Save model to "{:s}"'.format(saver.save(
+        sess=sess,
+        save_path=path.join(model_config['logdir'],'model.ckpt'),
+        global_step=global_step)))
 
 if __name__ == '__main__':
     # Parse args

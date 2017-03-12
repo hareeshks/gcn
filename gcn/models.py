@@ -22,11 +22,14 @@ class GCN_MLP(object):
         self.output_dim = placeholders['labels'].get_shape().as_list()[1]
         self.outputs = None
 
+        self.global_step = tf.Variable(0, name='global_step', trainable=False)
         self.loss = 0
         self.accuracy = 0
         self.optimizer = None
         self.opt_op = None
-        self.optimizer = tf.train.AdamOptimizer(learning_rate=self.model_config['learning_rate'])
+        self.summary = None
+        self.optimizer = tf.train.AdamOptimizer(
+            learning_rate=self.model_config['learning_rate'])
 
         self.build()
         return
@@ -39,7 +42,7 @@ class GCN_MLP(object):
         self.model_config['layer_size'].append(self.output_dim)
         sparse = True
         with tf.name_scope(self.name):
-            # create Variables 
+            # create Variables
             for input_dim, output_dim, layer_cls in \
                     zip(self.model_config['layer_size'][:-1],
                         self.model_config['layer_size'][1:],
@@ -72,7 +75,8 @@ class GCN_MLP(object):
             self._accuracy()
         tf.summary.scalar('accuracy', self.accuracy)
 
-        self.opt_op = self.optimizer.minimize(self.loss)
+        self.opt_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
+        self.summary = tf.summary.merge_all(tf.GraphKeys.SUMMARIES)
 
     def predict(self):
         return tf.nn.softmax(self.outputs)

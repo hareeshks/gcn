@@ -199,3 +199,7 @@ def preprocess_model_config(model_config):
             if not path.exists(logdir):
                 break
         model_config['logdir'] = logdir
+    # 
+    # # Checkpoint path
+    # if not model_config.get('ckpt_path', None):
+    #     model_config['ckpt_path'] = path.join(model_config['logdir'], 'checkpoint')

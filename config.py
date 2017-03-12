@@ -9,7 +9,7 @@ configuration ={
     'default':{
         'dataset'       : 'cora',       # 'Dataset string. (cora | citeseer | pubmed)'
         'conv'          : 'gcn',        # 'conv type. (gcn | cheby)'
-        'learning_rate' : 0.03,         # 'Initial learning rate.'
+        'learning_rate' : 0.001,         # 'Initial learning rate.'
         'epochs'        : 200,          # 'Number of epochs to train.'
 
         'connection'    : 'cc',
@@ -27,16 +27,20 @@ configuration ={
 
         'dropout'       : 0.5,          # 'Dropout rate (1 - keep probability).'
         'weight_decay'  : 5e-4,         # 'Weight for L2 loss on embedding matrix.'
-        'early_stopping': 0,            # 'Tolerance for early stopping (# of epochs).'
+
+        'early_stopping': 0,
+        # 'Tolerance for early stopping (# of epochs).
+        # Non positive value means never early stop.'
+
         'max_degree'    : 3,            # 'Maximum Chebyshev polynomial degree.'
         'random_seed'   : int(time.time()),     #'Random seed.'
         'feature'       : 'bow',        # 'bow (bag of words) or tfidf.'
 
         'logging'       : True,         # 'Weather or not to record log'
         'logdir'        : '',           # 'Log directory.''
-        'name'          : '',           # 'name of the model.'
+        'name'          : '',           # 'name of the model. Serve as an ID of model.'
         # if logdir or name are empty string,
-        # dir or name will be auto generated according to the
+        # logdir or name will be auto generated according to the
         # structure of the network
 
         'threads'       : cpu_count(),  #'Number of threads'
@@ -49,15 +53,18 @@ configuration ={
         {
             'connection': 'cc',
             'layer_size': [16],
+            'logdir'    : 'log/cora/0.05_train/c16c/run0'
         },
         {
             'connection': 'ddd',
             'layer_size': [16,16],
+            'logdir'    : 'log/cora/0.05_train/d16d16d/run0'
         },
         {
             'connection': 'cc',
             'conv'      : 'cheby',
             'layer_size': [16],
+            'logdir'    : 'log/cora/0.05_train/c16c_cheby3/run0'
         }
     ]
 }
