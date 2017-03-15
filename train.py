@@ -15,17 +15,18 @@ import argparse
 
 args = None
 
+
 def train(model_config):
     # Print model_config
     print('',
-        'name           : {}'.format(model_config['name']),
-        'logdir         : {}'.format(model_config['logdir']),
-        'dataset        : {}'.format(model_config['dataset']),
-        'train_size     : {}'.format(model_config['train_size']),
-        'learning_rate  : {}'.format(model_config['learning_rate']),
-        'feature        : {}'.format(model_config['feature']),
-        'logging        : {}'.format(model_config['logging']),
-        sep='\n')
+          'name           : {}'.format(model_config['name']),
+          'logdir         : {}'.format(model_config['logdir']),
+          'dataset        : {}'.format(model_config['dataset']),
+          'train_size     : {}'.format(model_config['train_size']),
+          'learning_rate  : {}'.format(model_config['learning_rate']),
+          'feature        : {}'.format(model_config['feature']),
+          'logging        : {}'.format(model_config['logging']),
+          sep='\n')
 
     # Load data
     adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = \
@@ -44,14 +45,14 @@ def train(model_config):
 
     # Define placeholders
     placeholders = {
-        'support': [tf.sparse_placeholder(tf.float32, name='support'+str(i)) for i in range(num_supports)],
+        'support': [tf.sparse_placeholder(tf.float32, name='support' + str(i)) for i in range(num_supports)],
         'features': tf.sparse_placeholder(tf.float32, name='features', shape=tf.constant(features[2], dtype=tf.int64)),
         'labels': tf.placeholder(tf.float32, name='labels', shape=(None, y_train.shape[1])),
         'labels_mask': tf.placeholder(tf.int32, name='labels_mask'),
         'dropout': tf.placeholder_with_default(0., name='dropout', shape=()),
-        'num_features_nonzero': tf.placeholder(tf.int32, name='num_features_nonzero')  # helper variable for sparse dropout
+        'num_features_nonzero': tf.placeholder(tf.int32, name='num_features_nonzero')
+        # helper variable for sparse dropout
     }
-
 
     # Create model
     model = GCN_MLP(model_config, placeholders, input_dim=features[2][1])
@@ -60,8 +61,10 @@ def train(model_config):
     train_writer = None
     valid_writer = None
     saver = None
+    # Random initialize
+    sess.run(tf.global_variables_initializer())
     if model_config['logdir']:
-        saver = tf.train.Saver()
+        saver = tf.train.Saver(model.vars)
         ckpt = tf.train.get_checkpoint_state(model_config['logdir'])
         if ckpt and ckpt.model_checkpoint_path:
             # Read from checkpoint
@@ -69,9 +72,8 @@ def train(model_config):
             saver.restore(sess, ckpt.model_checkpoint_path)
             graph = None
         else:
-            # Random initialize
+            # Leave variables randomized
             print('Random initialize variables...')
-            sess.run(tf.global_variables_initializer())
             graph = sess.graph
         train_writer = tf.summary.FileWriter(model_config['logdir'] + '/train', graph=graph)
         valid_writer = tf.summary.FileWriter(model_config['logdir'] + '/valid')
@@ -103,7 +105,7 @@ def train(model_config):
             feed_dict=train_feed_dict)
 
         # Validation
-        valid_loss, valid_acc, valid_summary= sess.run(
+        valid_loss, valid_acc, valid_summary = sess.run(
             [model.loss, model.accuracy, model.summary],
             feed_dict=valid_feed_dict)
         valid_loss_list.append(valid_loss)
@@ -125,12 +127,12 @@ def train(model_config):
 
         # Print results
         if args.verbose:
-            print(  "Epoch: {:04d}".format(global_step),
-                    "train_loss= {:.3f}".format(train_loss),
-                    "train_acc= {:.3f}".format(train_acc),
-                    "val_loss=", "{:.3f}".format(valid_loss),
-                    "val_acc= {:.3f}".format(valid_acc),
-                    "time=", "{:.5f}".format(time.time() - t))
+            print("Epoch: {:04d}".format(global_step),
+                  "train_loss= {:.3f}".format(train_loss),
+                  "train_acc= {:.3f}".format(train_acc),
+                  "val_loss=", "{:.3f}".format(valid_loss),
+                  "val_acc= {:.3f}".format(valid_acc),
+                  "time=", "{:.5f}".format(time.time() - t))
 
         if 0 < model_config['early_stopping'] < global_step \
                 and valid_loss_list[-1] > np.mean(valid_loss_list[-(model_config['early_stopping'] + 1):-1]):
@@ -144,17 +146,18 @@ def train(model_config):
           "accuracy=", "{:.5f}".format(test_acc), "time=", "{:.5f}".format(test_duration))
 
     # Saving
-    print('Save model to "{:s}"'.format(saver.save(
-        sess=sess,
-        save_path=path.join(model_config['logdir'],'model.ckpt'),
-        global_step=global_step)))
+    if model_config['logdir']:
+        print('Save model to "{:s}"'.format(saver.save(
+            sess=sess,
+            save_path=path.join(model_config['logdir'], 'model.ckpt'),
+            global_step=global_step)))
+
 
 if __name__ == '__main__':
     # Parse args
-    parser = argparse.ArgumentParser(description=
-                       '''This is used to train and test Graph Convolution Network for node classification problem.
-                       Most configuration are specified in config.py, please read it and modify it as you want.
-                       ''')
+    parser = argparse.ArgumentParser(description=(
+        "This is used to train and test Graph Convolution Network for node classification problem.\n"
+        "Most configuration are specified in config.py, please read it and modify it as you want."))
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args()
 
@@ -168,5 +171,5 @@ if __name__ == '__main__':
         # Initialize session
         with tf.Graph().as_default():
             with tf.Session(config=tf.ConfigProto(
-                intra_op_parallelism_threads=model_config['threads'])) as sess:
+                    intra_op_parallelism_threads=model_config['threads'])) as sess:
                 train(model_config)

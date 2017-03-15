@@ -60,8 +60,8 @@ def load_data(dataset_str, train_size):
     idx = np.arange(len(labels))
     np.random.shuffle(idx)
     idx_train = idx[0:len(idx)*train_size//100]
-    idx_val = idx[len(idx)*3//5:len(idx)*4//5]
-    idx_test = idx[len(idx)*4//5:len(idx)]
+    idx_val = idx[len(idx)*train_size//100:len(idx)*(train_size//2+50)//100]
+    idx_test = idx[len(idx)*(train_size//2+50)//100:len(idx)]
 
     train_mask = sample_mask(idx_train, labels.shape[0])
     val_mask = sample_mask(idx_val, labels.shape[0])

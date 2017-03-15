@@ -54,8 +54,8 @@ class Layer(object):
             assert kwarg in allowed_kwargs, 'Invalid keyword argument: ' + kwarg
         name = kwargs.get('name')
         if not name:
-            layer = self.__class__.__name__.lower()
-            name = layer + '_' + str(get_layer_uid(layer))
+            name = self.__class__.__name__.lower()
+            # name += '_' + str(get_layer_uid(name))
         self.name = name
         self.vars = {}
         logging = kwargs.get('logging', False)
@@ -66,7 +66,7 @@ class Layer(object):
         return inputs
 
     def __call__(self, inputs):
-        with tf.name_scope(self.name):
+        with tf.name_scope(self.name+'_cal'):
             if self.logging and not self.sparse_inputs:
                 tf.summary.histogram(self.name + '/inputs', inputs)
             outputs = self._call(inputs)
@@ -99,7 +99,7 @@ class Dense(Layer):
         # helper variable for sparse dropout
         self.num_features_nonzero = placeholders['num_features_nonzero']
 
-        with tf.name_scope(self.name + '_vars'):
+        with tf.name_scope(self.name):
             self.vars['weights'] = glorot([input_dim, output_dim],
                                           name='weights')
             if self.bias:
@@ -148,7 +148,7 @@ class GraphConvolution(Layer):
         # helper variable for sparse dropout
         self.num_features_nonzero = placeholders['num_features_nonzero']
 
-        with tf.name_scope(self.name + '_vars'):
+        with tf.name_scope(self.name):
             for i in range(len(self.support)):
                 self.vars['weights_' + str(i)] = glorot([input_dim, output_dim],
                                                         name='weights_' + str(i))

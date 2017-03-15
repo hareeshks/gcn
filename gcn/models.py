@@ -22,7 +22,7 @@ class GCN_MLP(object):
         self.output_dim = placeholders['labels'].get_shape().as_list()[1]
         self.outputs = None
 
-        self.global_step = tf.Variable(0, name='global_step', trainable=False)
+        self.global_step = None
         self.loss = 0
         self.accuracy = 0
         self.optimizer = None
@@ -43,6 +43,7 @@ class GCN_MLP(object):
         sparse = True
         with tf.name_scope(self.name):
             # create Variables
+            self.global_step = tf.Variable(0, name='global_step', trainable=False)
             for input_dim, output_dim, layer_cls in \
                     zip(self.model_config['layer_size'][:-1],
                         self.model_config['layer_size'][1:],
@@ -65,7 +66,7 @@ class GCN_MLP(object):
 
         # Store model variables for easy access
         variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.name)
-        self.vars = {var.name: var for var in variables}
+        self.vars.update({var.op.name: var for var in variables})
 
         # Build metrics
         with tf.name_scope('loss'):
