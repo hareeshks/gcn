@@ -8,7 +8,7 @@ from sklearn.preprocessing import normalize
 import sys
 import tensorflow as tf
 from os import path
-
+# import scipy.io as sio
 def parse_index_file(filename):
     """Parse index file."""
     index = []
@@ -59,7 +59,18 @@ def load_data(dataset_str, train_size):
 
     idx = np.arange(len(labels))
     np.random.shuffle(idx)
-    idx_train = idx[0:len(idx)*train_size//100]
+    no_class = labels.shape[1]
+    if(len(idx)*train_size//100 <= 5*labels.shape[1]):
+        idx_train = []
+        count = [0 for i in range(no_class)]
+        label_each_class = len(idx)*train_size//100//no_class + 1
+        for i in idx:
+            for j in range(no_class):
+                if labels[i, j] and count[j] < label_each_class:
+                    idx_train.append(i)
+                    count[j] += 1
+    else:
+        idx_train = idx[0:len(idx)*train_size//100]
     idx_val = idx[len(idx)*train_size//100:len(idx)*(train_size//2+50)//100]
     idx_test = idx[len(idx)*(train_size//2+50)//100:len(idx)]
 
@@ -73,6 +84,12 @@ def load_data(dataset_str, train_size):
     y_train[train_mask, :] = labels[train_mask, :]
     y_val[val_mask, :] = labels[val_mask, :]
     y_test[test_mask, :] = labels[test_mask, :]
+
+    # sio.savemat(dataset_str, {
+    #     'A': adj,
+    #     'X': features,
+    #     'Y': labels,
+    # })
 
     return adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask
 
