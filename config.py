@@ -92,26 +92,26 @@ configuration ={
     # The list of model to be train.
     # Only configurations that's different with default are specified here
     'model_list':[
-        {
-            'Model' : 0,
-            'dropout'           : 0.1,
-            'weight_decay'      : 1e-5,
-            'connection'        : 'cc',
-            'layer_size'        : [128],
-            'learning_rate'     : 0.01,
-            'validate'          : True,
-            # 'seed'              : 123,
-        },
         # {
-        #     'Model': 19,
-        #     'Model19' : 'union',
-        #     't'                 : 100,
+        #     'Model' : 0,
         #     'dropout'           : 0.1,
         #     'weight_decay'      : 1e-5,
         #     'connection'        : 'cc',
-        #     'layer_size'        : [64],
-        #     'epochs'            : 3,
-        # }
+        #     'layer_size'        : [128],
+        #     'learning_rate'     : 0.01,
+        #     'validate'          : True,
+        #     # 'seed'              : 123,
+        # },
+        {
+            'Model': 19,
+            'Model19' : 'union',
+            't'                 : 100,
+            'dropout'           : 0.1,
+            'weight_decay'      : 1e-5,
+            'connection'        : 'cc',
+            'layer_size'        : [64],
+            'epochs'            : 3,
+        },
         # {
         #     'Model'     : 0,
         #     'layer_size'        : [],

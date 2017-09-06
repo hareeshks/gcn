@@ -5,6 +5,7 @@ import pickle as pkl
 import networkx as nx
 import scipy.io as sio
 import scipy.sparse as sp
+import scipy.linalg as slinalg
 from scipy.sparse.linalg.eigen.arpack import eigsh
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.preprocessing import normalize
@@ -13,7 +14,6 @@ import tensorflow as tf
 from os import path
 import copy
 import os
-import scipy.io as sio
 
 def save_sparse_csr(filename,array):
     np.savez(filename,data = array.data ,indices=array.indices,
@@ -533,14 +533,28 @@ def absorption_probability(W, alpha, stored_A = None):
         A = np.load(stored_A+str(alpha)+'.npy')
         print('load A from '+ stored_A+str(alpha)+'.npy')
     except:
+        print('Calculate absorption probability...')
         W = W.copy().astype(np.float32)
         D = W.sum(1).flat
         L = np.diag(D) - W
-        A = np.array(np.linalg.inv(L + alpha * np.eye(W.shape[0])))
+        L += alpha * np.eye(W.shape[0], dtype=L.dtype)
+        # print(np.linalg.det(L))
+        A = np.array(slinalg.inv(L, overwrite_a=True))
         if stored_A:
             np.save(stored_A+str(alpha)+'.npy', A)
     return A
 
+def gaussian_seidel(A,B):
+    X = np.ones(B.shape)
+    D = A.diagonal().reshape(A.shape[0], 1)
+    R = A.copy()
+    R.setdiag(0)
+    for i in range(10000):
+        # X = R.dot(X)
+        # X = B-X
+        # X = X/D
+        X = (B-R.dot(X))/D
+    return X
 
 def Model9(W, s, t, alpha, y_train, train_mask, features, stored_A = None):
     A = absorption_probability(W, alpha, stored_A)
@@ -954,3 +968,27 @@ def preprocess_model_config(model_config):
         # if not model_config.get('ckpt_path', None):
         #     model_config['ckpt_path'] = path.join(model_config['logdir'], 'checkpoint')
 
+if __name__ == '__main__':
+    A = sp.csr_matrix(np.array([
+        [2.,-1.],
+        [1., 2.]
+    ]))
+    B = sp.csr_matrix(np.array([
+        [2., 3],
+        [6., 9],
+    ]))
+    X = np.array([
+        [1.],
+        [1.]
+    ])
+    adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data('cora', 20, 20)
+    alpha = 1e-5
+    adj = normalize_adj(adj)
+    adj = adj.copy().astype(np.float32)
+    D = adj.sum(1).flat
+    L = sp.diags(D) - adj
+    L += alpha * sp.eye(adj.shape[0], dtype=L.dtype)
+
+    inv = np.linalg.inv(L.toarray())
+    X = gaussian_seidel(L, sp.eye(L.shape[0], dtype=L.dtype).tocsr()[:, train_mask])
+    pass
