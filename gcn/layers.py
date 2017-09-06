@@ -49,7 +49,7 @@ class Layer(object):
     """
 
     def __init__(self, **kwargs):
-        allowed_kwargs = {'name', 'logging'}
+        allowed_kwargs = {'name', 'logging', 'use_theta'}
         for kwarg in kwargs.keys():
             assert kwarg in allowed_kwargs, 'Invalid keyword argument: ' + kwarg
         name = kwargs.get('name')
@@ -131,7 +131,7 @@ class GraphConvolution(Layer):
     """Graph convolution layer."""
     def __init__(self, input_dim, output_dim, placeholders, dropout=0.,
                  sparse_inputs=False, act=tf.nn.relu, bias=False,
-                 featureless=False, **kwargs):
+                 featureless=False, use_theta=False, **kwargs):
         super(GraphConvolution, self).__init__(**kwargs)
 
         if dropout:
@@ -144,14 +144,20 @@ class GraphConvolution(Layer):
         self.sparse_inputs = sparse_inputs
         self.featureless = featureless
         self.bias = bias
-
+        self.use_theta = use_theta
         # helper variable for sparse dropout
         self.num_features_nonzero = placeholders['num_features_nonzero']
 
         with tf.name_scope(self.name):
-            for i in range(len(self.support)):
-                self.vars['weights_' + str(i)] = glorot([input_dim, output_dim],
-                                                        name='weights_' + str(i))
+            if use_theta:
+                self.vars['weight'] = glorot([input_dim, output_dim], name='weight')
+                for i in range(len(self.support)):
+                    self.vars['theta_' + str(i)] = tf.constant(1, name='theta_' + str(i), dtype=tf.float32)
+                        # glorot((1,1), name='theta_' + str(i))
+            else:
+                for i in range(len(self.support)):
+                    self.vars['weights_' + str(i)] = glorot([input_dim, output_dim],
+                                                            name='weights_' + str(i))
             if self.bias:
                 self.vars['bias'] = zeros([output_dim], name='bias')
 
@@ -170,14 +176,25 @@ class GraphConvolution(Layer):
         # convolve
         supports = list()
         for i in range(len(self.support)):
-            if not self.featureless:
-                pre_sup = dot(x, self.vars['weights_' + str(i)],
-                              sparse=self.sparse_inputs)
+            if self.use_theta:
+                H = None
+                if H != None:
+                    H = tf.sparse_add(H, self.support[i]*self.vars['theta_' + str(i)])
+                else:
+                    H = self.support[i]*self.vars['theta_' + str(i)]
             else:
-                pre_sup = self.vars['weights_' + str(i)]
-            support = dot(self.support[i], pre_sup, sparse=True)
-            supports.append(support)
-        output = tf.add_n(supports)
+                if not self.featureless:
+                    pre_sup = dot(x, self.vars['weights_' + str(i)],
+                                  sparse=self.sparse_inputs)
+                else:
+                    pre_sup = self.vars['weights_' + str(i)]
+                support = dot(self.support[i], pre_sup, sparse=True)
+                supports.append(support)
+
+        if self.use_theta:
+            output = dot(H, dot(x, self.vars['weight'], sparse=self.sparse_inputs), sparse=True)
+        else:
+            output = tf.add_n(supports)
 
         # bias
         if self.bias:

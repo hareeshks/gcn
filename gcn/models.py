@@ -1,6 +1,8 @@
 from gcn.layers import Dense, GraphConvolution
 from gcn.metrics import masked_accuracy, masked_softmax_cross_entropy
 import tensorflow as tf
+from copy import copy
+
 
 class GCN_MLP(object):
     def __init__(self, model_config, placeholders, input_dim):
@@ -19,7 +21,8 @@ class GCN_MLP(object):
         self.inputs = placeholders['features']
         self.input_dim = input_dim
         # self.input_dim = self.inputs.get_shape()[1]  # To be supported in future Tensorflow versions
-        self.output_dim = placeholders['labels'].get_shape().as_list()[1]
+        self.output_dim = placeholders['labels'].get_shape().as_list()[1] if model_config['Model'] not in [11, 13, 14, 15] else \
+        placeholders['label_per_sample'].get_shape().as_list()[1]
         self.outputs = None
 
         self.global_step = None
@@ -29,32 +32,36 @@ class GCN_MLP(object):
         self.opt_op = None
         self.summary = None
         self.optimizer = tf.train.AdamOptimizer(
-            learning_rate=self.model_config['learning_rate'])
+            learning_rate=self.model_config['learning_rate'],
+            # beta2=0.90,
+        )
 
         self.build()
         return
 
     def build(self):
-        self.model_config['connection'] = list(map(
+        layer_type = list(map(
             lambda x: {'c': GraphConvolution, 'd': Dense}.get(x),
             self.model_config['connection']))
-        self.model_config['layer_size'].insert(0, self.input_dim)
-        self.model_config['layer_size'].append(self.output_dim)
+        layer_size = copy(self.model_config['layer_size'])
+        layer_size.insert(0, self.input_dim)
+        layer_size.append(self.output_dim)
         sparse = True
         with tf.name_scope(self.name):
             # create Variables
             self.global_step = tf.Variable(0, name='global_step', trainable=False)
             for input_dim, output_dim, layer_cls in \
-                    zip(self.model_config['layer_size'][:-1],
-                        self.model_config['layer_size'][1:],
-                        self.model_config['connection']):
+                    zip(layer_size[:-1],
+                        layer_size[1:],
+                        layer_type):
                 self.layers.append(layer_cls(input_dim=input_dim,
                                              output_dim=output_dim,
                                              placeholders=self.placeholders,
                                              act=self.act,
                                              dropout=True,
                                              sparse_inputs=sparse,
-                                             logging=self.logging))
+                                             logging=self.logging,
+                                             use_theta= self.model_config['conv'] == 'chebytheta'))
                 sparse = False
 
             # Build sequential layer model
@@ -69,18 +76,35 @@ class GCN_MLP(object):
         self.vars.update({var.op.name: var for var in variables})
 
         # Build metrics
+        with tf.name_scope('predict'):
+            self._predict()
         with tf.name_scope('loss'):
             self._loss()
         tf.summary.scalar('loss', self.loss)
         with tf.name_scope('accuracy'):
             self._accuracy()
+            self._accuracy_of_class()
         tf.summary.scalar('accuracy', self.accuracy)
 
         self.opt_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
         self.summary = tf.summary.merge_all(tf.GraphKeys.SUMMARIES)
 
-    def predict(self):
-        return tf.nn.softmax(self.outputs)
+    def _predict(self):
+        if self.model_config['Model'] in [11, 13, 14, 15]:
+            if self.model_config['Model'] in [14, 15] or self.model_config['Model11'] == 'weighted':
+                sample2label = self.placeholders['sample2label']
+                unsoftmaxed = tf.matmul(self.outputs, sample2label) / tf.reduce_sum(sample2label, axis=0,
+                                                                                    keep_dims=True)
+                self.prediction = tf.nn.softmax(unsoftmaxed)
+            elif self.model_config['Model11'] == 'nearest':
+                sample2label = self.placeholders['sample2label']
+                outputs = tf.one_hot(tf.argmax(self.outputs, axis=1),
+                                     depth=self.placeholders['label_per_sample'].get_shape().as_list()[1])
+                unsoftmaxed = tf.matmul(outputs, sample2label)
+                self.prediction = tf.nn.softmax(unsoftmaxed)
+
+        else:
+            self.prediction = tf.nn.softmax(self.outputs)
 
     def _loss(self):
         # Weight decay loss
@@ -88,12 +112,63 @@ class GCN_MLP(object):
             for var in layer.vars.values():
                 self.loss += self.model_config['weight_decay'] * tf.nn.l2_loss(var)
         # Cross entropy error
-        self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
-                                                  self.placeholders['labels_mask'])
+        if self.model_config['Model'] in [11, 13]:
+            assert(self.model_config['Model11'] in ['nearest', 'weighted'])
+            self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['label_per_sample'],
+                                                      self.placeholders['labels_mask'])
+        elif self.model_config['Model'] in [14, 15]:
+                sample2label = self.placeholders['sample2label']
+                unsoftmaxed = tf.matmul(self.outputs, sample2label) / tf.reduce_sum(sample2label, axis=0,
+                                                                                    keep_dims=True)
+                self.loss += masked_softmax_cross_entropy(unsoftmaxed, self.placeholders['labels'],
+                                                          self.placeholders['labels_mask'])
+        else:
+            self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
+                                                      self.placeholders['labels_mask'])
+        # Laplacian regularization
+        if self.model_config['lambda'] != 0:
+            self._laplacian_regularization(tf.nn.softmax(self.outputs))
+            self.loss += self.model_config['lambda'] * self.lapla_reg
+
+    def _laplacian_regularization(self, graph_signals):
+        self.lapla_reg = tf.sparse_tensor_dense_matmul(self.placeholders['laplacian'], graph_signals)
+        self.lapla_reg = tf.matmul(tf.transpose(graph_signals), self.lapla_reg)
+        self.lapla_reg = tf.trace(self.lapla_reg)
 
     def _accuracy(self):
-        self.accuracy = masked_accuracy(self.outputs, self.placeholders['labels'],
-                                        self.placeholders['labels_mask'])
+        if self.model_config['Model'] in [11, 13, 14, 15]:
+            if self.model_config['Model'] in [14, 15] or self.model_config['Model11'] == 'weighted':
+                sample2label = self.placeholders['sample2label']
+                unsoftmaxed = tf.matmul(self.outputs, sample2label) / tf.reduce_sum(sample2label, axis=0,
+                                                                                    keep_dims=True)
+                self.accuracy = masked_accuracy(unsoftmaxed, self.placeholders['labels'],
+                                                self.placeholders['labels_mask'])
+            elif self.model_config['Model11'] == 'nearest':
+                sample2label = self.placeholders['sample2label']
+                outputs = tf.one_hot(tf.argmax(self.outputs, axis=1),
+                                     depth=self.placeholders['label_per_sample'].get_shape().as_list()[1])
+                unsoftmaxed = tf.matmul(outputs, sample2label)
+                self.accuracy = masked_accuracy(unsoftmaxed, self.placeholders['labels'],
+                                                self.placeholders['labels_mask'])
+            else:
+                raise ValueError("model_config['Model11'] should be either 'weighted' or 'nearest'")
+        else:
+            self.accuracy = masked_accuracy(self.outputs, self.placeholders['labels'],
+                                            self.placeholders['labels_mask'])
+
+    def _accuracy_of_class(self):
+        if self.model_config['Model'] in [11, 13, 14, 15]:
+            sample2label = self.placeholders['sample2label']
+            unsoftmaxed = tf.matmul(self.outputs, sample2label) / tf.reduce_sum(sample2label, axis=0, keep_dims=True)
+            self.accuracy_of_class = [masked_accuracy(unsoftmaxed, self.placeholders['labels'],
+                                                      self.placeholders['labels_mask'] * self.placeholders['labels'][:,
+                                                                                         i])
+                                      for i in range(self.placeholders['labels'].shape[1])]
+        else:
+            self.accuracy_of_class = [masked_accuracy(self.outputs, self.placeholders['labels'],
+                                                      self.placeholders['labels_mask'] * self.placeholders['labels'][:,
+                                                                                         i])
+                                      for i in range(self.placeholders['labels'].shape[1])]
 
     def save(self, sess=None):
         if not sess:
