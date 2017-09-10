@@ -103,7 +103,7 @@ def load_data(dataset_str, train_size, validation_size):
             features_extended = sp.hstack((features, sp.lil_matrix((features.shape[0], len(isolated_node_idx)))),
                                           dtype=np.int32).todense()
             features_extended[isolated_node_idx, features.shape[1]:] = np.eye(len(isolated_node_idx))
-            features = sp.csr_matrix(features_extended, dtype=np.float64)
+            features = sp.csr_matrix(features_extended, dtype=np.float32)
             print("Done!")
             save_sparse_csr("data/planetoid/{}.features".format(dataset_str), features)
         else:
@@ -156,7 +156,7 @@ def load_data(dataset_str, train_size, validation_size):
     else:
         idx_test = test_idx_range.tolist()
         idx_train = range(len(y))
-        idx_val = range(len(y), len(y)+500)
+        idx_val = range(len(y), len(y) + 500)
 
         train_mask = sample_mask(idx_train, labels.shape[0])
         val_mask = sample_mask(idx_val, labels.shape[0])
@@ -168,20 +168,7 @@ def load_data(dataset_str, train_size, validation_size):
         y_train[train_mask, :] = labels[train_mask, :]
         y_val[val_mask, :] = labels[val_mask, :]
         y_test[test_mask, :] = labels[test_mask, :]
-    # sio.savemat(dataset_str, {
-    #     'A': adj,
-    #     'X': features,
-    #     'Y': labels,
-    # })
 
-    # for i in range(labels.shape[1]):
-    #     indicator = labels[:,i]
-    #     number = np.sum(indicator)
-    #     indicator = indicator.astype(np.bool)
-    #     D = np.sum(adj[indicator], axis=1)
-    #     median = np.median(D.flat)
-    #     total_degree = np.sum(D)
-    #     print(i,total_degree/number, median)
     return adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask
 
 
@@ -556,7 +543,7 @@ def gaussian_seidel(A,B):
         X = (B-R.dot(X))/D
     return X
 
-def Model9(W, s, t, alpha, y_train, train_mask, features, stored_A = None):
+def Model9(W, t, alpha, y_train, train_mask, features, stored_A = None):
     A = absorption_probability(W, alpha, stored_A)
     y_train = y_train.copy()
     train_index = np.where(train_mask)[0]
@@ -565,13 +552,13 @@ def Model9(W, s, t, alpha, y_train, train_mask, features, stored_A = None):
         features = features.toarray()
     print("Additional Label:")
     if not hasattr(t, '__getitem__'):
-        t = [t for i in range(y_train.shape[1])]
+        t = [t for _ in range(y_train.shape[1])]
     for i in range(y_train.shape[1]):
         y = y_train[:, i:i + 1]
         a = A.dot(y)
         a[already_labeled > 0] = 0
         # a[W.dot(y) > 0] = 0
-        gate = (-np.sort(-a, axis=0))[s]
+        gate = (-np.sort(-a, axis=0))[t[i]]
         index = np.where(a.flat > gate)[0]
 
         # x1 = features[index, :].reshape((-1, 1, features.shape[1]))
@@ -881,7 +868,7 @@ def preprocess_model_config(model_config):
         if model_config['Model'] in [6]:
             pass
         if model_config['Model'] in [9,10]:
-            model_name += '_s' + str(model_config['s']) + '_alpha_' + str(
+            model_name += '_alpha_' + str(
                 model_config['alpha']) + '_t' + str(model_config['t']).replace('[', '_').replace(']','_').replace(', ','_')
         if model_config['Model'] in [11]:
             model_name += '_' + model_config["Model11"]

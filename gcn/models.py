@@ -161,13 +161,11 @@ class GCN_MLP(object):
             sample2label = self.placeholders['sample2label']
             unsoftmaxed = tf.matmul(self.outputs, sample2label) / tf.reduce_sum(sample2label, axis=0, keep_dims=True)
             self.accuracy_of_class = [masked_accuracy(unsoftmaxed, self.placeholders['labels'],
-                                                      self.placeholders['labels_mask'] * self.placeholders['labels'][:,
-                                                                                         i])
+                                                      self.placeholders['labels_mask'] * self.placeholders['labels'][:,i])
                                       for i in range(self.placeholders['labels'].shape[1])]
         else:
             self.accuracy_of_class = [masked_accuracy(self.outputs, self.placeholders['labels'],
-                                                      self.placeholders['labels_mask'] * self.placeholders['labels'][:,
-                                                                                         i])
+                                                      self.placeholders['labels_mask'] * self.placeholders['labels'][:,i])
                                       for i in range(self.placeholders['labels'].shape[1])]
 
     def save(self, sess=None):
