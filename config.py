@@ -24,9 +24,9 @@ configuration ={
 
     # The default model configuration
     'default':{
-        'dataset'           : 'nell.0.001',     # 'Dataset string. (cora | citeseer | pubmed | CIFAR-Fea | USPS-Fea)'
-        # 'train_size'        : 1,         # if train_size is a number, then use TRAIN_SIZE%% data to train model
-        'train_size'        : [20, 20, 20, 20, 20, 20, 20], # if train_size is a list of numbers, then it specifies training lables for each class.
+        'dataset'           : 'cora',     # 'Dataset string. (cora | citeseer | pubmed | CIFAR-Fea | USPS-Fea)'
+        'train_size'        : 1,         # if train_size is a number, then use TRAIN_SIZE%% data to train model
+        # 'train_size'        : [20, 20, 20, 20, 20, 20, 20], # if train_size is a list of numbers, then it specifies training lables for each class.
         'validation_size'   : 20,           # 'Use VALIDATION_SIZE% data to train model'
         'validate'          : False,        # Whether use validation set
         'conv'              : 'gcn',        # 'conv type. (gcn | cheby | chebytheta | gcn_rw)'
@@ -39,13 +39,13 @@ configuration ={
         # if Model == 0 do not construct new adjacency matrix
         # if Model == 1, use Model1
         # if Model == 2, use Model2
-        's'                 : 100,
+        # 's'                 : 100,
         # 's' in the construction of  absorption probability
         # if s = -1 and Model == 1, non zero elements in each row equals to the original adjacency matrix
         'alpha'             : 1e-6,         # 'alpha' in the construction of  absorption probability
         'absorption_type'   : 'binary',     # When Model == 1, the new constructed adjacency matrix is either 'binary' or 'weighted'
         'mu'                : 1,          # 'mu' in the Model5
-        't'                 : 100,           # In model9, top 't' nodes will be reserved.
+        't'                 : -1,           # In model9, top 't' nodes will be reserved.
         't2'                : 100,          # In model 21
         'lambda'            : 0,
         'Model11'           : 'nearest',     # 'weighted' | 'nearest'
@@ -84,7 +84,7 @@ configuration ={
         # logdir or name will be auto generated according to the
         # structure of the network
 
-        'threads'           : cpu_count(),  #'Number of threads'
+        'threads'           : 2*cpu_count(),  #'Number of threads'
         'train'             : True,
         'drop_inter_class_edge': False,
     },
@@ -92,193 +92,44 @@ configuration ={
     # The list of model to be train.
     # Only configurations that's different with default are specified here
     'model_list':[
-        # {
-        #     'Model' : 0,
-        #     'dropout'           : 0.1,
-        #     'weight_decay'      : 1e-5,
-        #     'connection'        : 'cc',
-        #     'layer_size'        : [128],
-        #     'learning_rate'     : 0.01,
-        #     'validate'          : True,
-        #     # 'seed'              : 123,
-        # },
+        # \textbf{ParWalk} \\
         {
-            'Model': 19,
-            'Model19' : 'union',
-            't'                 : 100,
-            'dropout'           : 0.1,
-            'weight_decay'      : 1e-5,
-            'connection'        : 'cc',
-            'layer_size'        : [64],
-            'epochs'            : 3,
-        },
-        # {
-        #     'Model'     : 0,
-        #     'layer_size'        : [],
-        #     'connection'        : 'd',
-        # },
-        # {
-        #     'Model'     : 0,
-        #     'layer_size'        : [],
-        #     'connection'        : 'c',
-        # },
-        # {
-        #     'Model'     : 0,
-        #     'layer_size'        : [16],
-        #     'connection'        : 'dd',
-        # },
-        # {
-        #     'Model'     : 19,
-        #     't'         : 50,
-        #     'Model19'   : 'intersection'
-        # },
-        # {
-        #     'Model'     : 20,
-        #     't'         : 200,
-        # },
-        # {
-        #     'Model'     : 21,
-        #     't'         : 200,
-        #     't2'        : [50, 50, 50, 50, 50, 50, 50]
-        # }
-        # {
-        #     'Model'         : 16,
-        #         't'                 : [100, 100, 100, 100, 100, 100, 100],
-        #     'Model_to_add_label': {
-        #         'Model'             :16,
-        #         't'             : [50, 50, 50, 50, 50, 50, 50],
-        #         'Model_to_add_label': {
-        #             'Model'             :16,
-        #             't'             : [25, 25, 25, 25, 25, 25, 25],
-        #             'Model_to_add_label': { 'Model' :0 }, # for model 16
-        #             'Model_to_predict'  : { 'Model' :0 }, # for model 16
-        #         },
-        #         'Model_to_predict'  : { 'Model' :0 }, # for model 16
-        #     },
-        #     'Model_to_predict'  : { 'Model' :0 }, # for model 16
-        # },
-        # {
-        #     'Model'         : 19,
-        #     'Model19'       : 'union',
-        #     't'             : [50, 50, 50, 50, 50, 50, 50]
-        # },
-        # {
-        #     'Model'                 : 0,
-        #     'validate'          : True,
-        # },
-        # {
-        #     'Model'                 : 0,
-        #     'conv'                  : 'gcn_rw',
-        #     'validate'          : True,
-        # },
-        # {
-        #     'Model'                 :0,
-        #     'connection'        : 'ccc',
-        #     'layer_size'        : [32, 16],
-        #     'conv'              : 'gcn_rw',
-        #     'validate'          : True,
-        # },
-        # {
-        #     'Model'                 :0,
-        #     'connection'        : 'cccc',
-        #     'layer_size'        : [64, 32, 16],
-        #     'conv'              : 'gcn_rw',
-        #     'validate'          : True,
-        # },
-        # {
-        #     'Model'                 :0,
-        #     'connection'        : 'ccccc',
-        #     'layer_size'        : [128, 64, 32, 16],
-        #     'conv'              : 'gcn_rw',
-        #     'validate'          : True,
-        # },
-        # {
-        #     'Model'                 :0,
-        #     'connection'        : 'cccccc',
-        #     'layer_size'        : [256, 128, 64, 32, 16],
-        #     'conv'              : 'gcn_rw',
-        #     'validate'          : True,
-        # },
+            'Model' : 17,
 
-        # {
-        #     'Model'                 :17
-        # },
-        # {
-        #     'Model'                 :17,
-        #     'drop_inter_class_edge' : True,
-        # },
-        # {
-        #     'Model'             : 17,
-        #     't'                 : 20,
-        #     'train_size'        : [20, 20, 20, 20, 20, 20, 20]
-        # },
-        # {
-        #     'Model'             : 17,
-        #     'train_size'        : [2, 2, 2, 2, 2, 2, 2]
-        # },
-        # {
-        #     'Model'             : 0,
-        # },
-        # {
-        #     'Model'             : 0,
-        #     'conv'              : 'cheby',
-        #     'max_degree'        : 2,
-        # },
-        # {
-        #     'Model'             : 16,
-        #     'validate'          : False,        # Whether use validation set
-        #     't'                 : [50, 50, 50, 50, 50, 50, 50], # t additional labels for each class
-        #     'Model_to_add_label': {
-        #         'Model' :0
-        #     },
-        #     'Model_to_predict'  : {
-        #         'Model' :0
-        #     }
-        # },
-        # {
-        #     'Model'         : 5,
-        # },
-        # {
-        #     'Model'         : 0,
-        # },
-        # {
-        #     'Model'         : 0,
-        #     'Model5'        : 1.5
-        # },
-        # {
-        #     'Model'         : 0,
-        #     'Model5'        : 1.5
-        # },
-        # {
-        #     'Model'         : 0,
-        #     'Model5'        : 1.5
-        # },
-        # {
-        #     'Model'         : 0,
-        #     'Model5'        : 1.0
-        # },
-        # {
-        #     'Model'         : 0,
-        #     'Model5'        : 1.0,
-        #     'conv'          : 'cheby',        # 'conv type. (gcn | cheby)'
-        #     'max_degree'    : 2,            # 'Maximum Chebyshev polynomial degree.'
-        # },
-        # {
-        #     'Model'         : 9,
-        #     's'             : 100,
-        #     't'             : 50,
-        # },
-        # {
-        #     'Model'         : 13,
-        #     'Model11'       : 'weighted',
-        #     's'             : 100,
-        #     't'             : 50,
-        # },
-        # {
-        #     'Model'         : 15,
-        #     's'             : 100,
-        #     't'             : 50,
-        # }
+        },
+        # \textbf{Chebyshev}
+        {
+            'Model' : 0,
+            'conv'  : 'cheby',
+        },
+        # \textbf{\tiny GCN without Validation}\\
+        {
+            'Model'     : 0,
+            'validate'  : False,
+        },
+        # \textbf{\tiny GCN with Validation} \\
+        {
+            'Model'     : 0,
+            'validate'  : True,
+        },
+        # \textbf{Co-training}  \\
+        {
+            'Model'     : 9,
+        },
+        # \textbf{Self-traing}   \\
+        {
+            'Model'     : 16,
+        },
+        # \textbf{Union}\\
+        {
+            'Model'     : 19,
+            'Model19'   : 'union',
+        },
+        # \textbf{Intersection}\\
+        {
+            'Model'     : 19,
+            'Model19'   : 'intersection',
+        },
     ]
 }
 

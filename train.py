@@ -15,6 +15,7 @@ from gcn.models import GCN_MLP
 
 from config import configuration
 import argparse
+import sys
 args = None
 
 # new_adj = None
@@ -62,6 +63,9 @@ def train(model_config, sess, seed, data_split = None):
         }
     laplacian = sparse.diags(adj.sum(1).flat, 0) - adj
     laplacian = laplacian.astype(np.float32).tocoo()
+    if model_config['t'] < 0:
+        eta = adj.shape[0]/(adj.sum()/adj.shape[0])**len(model_config['connection'])
+        model_config['t'] = (y_train.sum(axis=0)*eta/y_train.sum()).astype(np.int64)
 
     # origin_adj = adj
     if model_config['Model'] == 0:
@@ -92,7 +96,7 @@ def train(model_config, sess, seed, data_split = None):
         # original_y_train = y_train
         y_train, train_mask = Model8(adj, model_config['s'], model_config['alpha'], y_train, train_mask)
     elif model_config['Model'] == 9:
-        y_train, train_mask = Model9(adj, model_config['s'], model_config['t'], model_config['alpha'],
+        y_train, train_mask = Model9(adj, model_config['t'], model_config['alpha'],
                                      y_train, train_mask, features, stored_A = model_config['dataset']+'_A_I')
     elif model_config['Model'] == 10:
         y_train, train_mask = Model10(adj, model_config['s'], model_config['t'], model_config['alpha'],
@@ -103,7 +107,7 @@ def train(model_config, sess, seed, data_split = None):
     elif model_config['Model'] == 12:
         pass
     elif model_config['Model'] == 13:
-        y_train, train_mask = Model9(adj, model_config['s'], model_config['t'], model_config['alpha'],
+        y_train, train_mask = Model9(adj, model_config['t'], model_config['alpha'],
                                      y_train, train_mask, features, stored_A = model_config['dataset']+'_A_I')
         y = np.sum(train_mask)
         label_per_sample, sample2label = Model11(y, y_train, train_mask)
@@ -111,7 +115,7 @@ def train(model_config, sess, seed, data_split = None):
         y = np.sum(train_mask)
         label_per_sample, sample2label = Model11(y, y_train, train_mask)
     elif model_config['Model'] == 15:
-        y_train, train_mask = Model9(adj, model_config['s'], model_config['t'], model_config['alpha'],
+        y_train, train_mask = Model9(adj, model_config['t'], model_config['alpha'],
                                      y_train, train_mask, features, stored_A = model_config['dataset']+'_A_I')
         y = np.sum(train_mask)
         label_per_sample, sample2label = Model11(y, y_train, train_mask)
@@ -143,7 +147,7 @@ def train(model_config, sess, seed, data_split = None):
         print("accuracy of each class=", test_acc_of_class)
         return test_acc, test_acc_of_class, prediction
     elif model_config['Model'] == 18:
-        y_train, train_mask = Model9(adj, model_config['s'], model_config['t'], model_config['alpha'],
+        y_train, train_mask = Model9(adj, model_config['t'], model_config['alpha'],
                                  y_train, train_mask, features, stored_A=model_config['dataset'] + '_A_I')
         alpha = 1e-6
         test_acc, test_acc_of_class, prediction = Model17(adj, alpha, y_train, train_mask, y_test,
@@ -214,8 +218,8 @@ def train(model_config, sess, seed, data_split = None):
     placeholders = {
         'support': [tf.sparse_placeholder(tf.float32, name='support' + str(i)) for i in range(num_supports)],
         'features': tf.sparse_placeholder(tf.float32, name='features', shape=tf.constant(features[2], dtype=tf.int64)),
-        'labels': tf.placeholder(tf.float32, name='labels', shape=(None, y_train.shape[1])),
-        'labels_mask': tf.placeholder(tf.float32, name='labels_mask'),
+        'labels': tf.placeholder(tf.int32, name='labels', shape=(None, y_train.shape[1])),
+        'labels_mask': tf.placeholder(tf.int32, name='labels_mask'),
         'dropout': tf.placeholder_with_default(0., name='dropout', shape=()),
         'num_features_nonzero': tf.placeholder(tf.int32, name='num_features_nonzero'),
         # helper variable for sparse dropout
@@ -246,7 +250,7 @@ def train(model_config, sess, seed, data_split = None):
             saver.restore(sess, ckpt.model_checkpoint_path)
             graph = None
         else:
-            # Leave variables randomized
+        # Leave variables randomized
             print('Random initialize variables...')
             graph = sess.graph
         train_writer = tf.summary.FileWriter(
@@ -312,6 +316,7 @@ def train(model_config, sess, seed, data_split = None):
                 run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
                 run_metadata = tf.RunMetadata()
                 sess.run(model.opt_op, feed_dict=train_feed_dict, options=run_options, run_metadata=run_metadata)
+                train_writer.add_run_metadata(run_metadata, 'step%d' % step)
                 # Create the Timeline object, and write it to a json
                 with open(path.join(model_config['logdir'], 'timeline.json'), 'w') as f:
                     f.write(timeline.Timeline(run_metadata.step_stats).generate_chrome_trace_format())
