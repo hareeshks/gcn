@@ -775,10 +775,10 @@ def Model19(prediction, t, y_train, train_mask, W, alpha, stored_A, union_or_int
     count = [0 for i in range(no_class)]
     index_gcn = [[] for i in range(no_class)]
     for i in sorted_index:
-        for j in range(no_class):
-            if new_labels_gcn[i] == j and count[j] < t[j] and not train_mask[i]:
-                index_gcn[j].append(i)
-                count[j] += 1
+        j = new_labels_gcn[i]
+        if count[j] < t[j] and not train_mask[i]:
+            index_gcn[j].append(i)
+            count[j] += 1
 
     # lp
     A = absorption_probability(W, alpha, stored_A, train_mask)
@@ -787,7 +787,7 @@ def Model19(prediction, t, y_train, train_mask, W, alpha, stored_A, union_or_int
     index_lp = []
     for i in range(no_class):
         y = y_train[:, i:i + 1]
-        a = A.dot(y)
+        a = np.sum(A[:, y.flat>0], axis=1)
         a[already_labeled > 0] = 0
         # a[W.dot(y) > 0] = 0
         gate = (-np.sort(-a, axis=0))[t[i]]
@@ -842,7 +842,7 @@ def Model20(prediction, t, y_train, train_mask, W, alpha, stored_A):
     index_lp = []
     for i in range(no_class):
         y = y_train[:, i:i + 1]
-        a = A.dot(y)
+        a = A.dot(sp.csc_matrix(y))
         a[already_labeled > 0] = 0
         # a[W.dot(y) > 0] = 0
         gate = (-np.sort(-a, axis=0))[t[i]]

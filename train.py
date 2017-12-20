@@ -13,10 +13,8 @@ from gcn.utils import construct_feed_dict, preprocess_features, drop_inter_class
     Model10, Model11, Model12, Model16, Model17, Model19, Model20, Model22, taubin_smoothor
 from gcn.models import GCN_MLP
 
-from config import configuration
-import argparse
+from config import configuration, args
 import sys
-args = None
 
 # new_adj = None
 
@@ -250,23 +248,23 @@ def train(model_config, sess, seed, data_split = None):
     train_writer = None
     valid_writer = None
     saver = None
-    if model_config['logdir']:
-        saver = tf.train.Saver(model.vars)
-        ckpt = tf.train.get_checkpoint_state(model_config['logdir'])
-        if None and ckpt and ckpt.model_checkpoint_path:  # never load data so far
-            # TODO: load from ckpt
-            # Read from checkpoint
-            print('load model from "{}"...'.format(ckpt.model_checkpoint_path))
-            saver.restore(sess, ckpt.model_checkpoint_path)
-            graph = None
-        else:
-        # Leave variables randomized
-            print('Random initialize variables...')
-            graph = sess.graph
-        train_writer = tf.summary.FileWriter(
-            path.join(model_config['logdir'], 'train'),
-            graph=graph)
-        valid_writer = tf.summary.FileWriter(path.join(model_config['logdir'], 'valid'))
+    # if model_config['logdir']:
+    #     saver = tf.train.Saver(model.vars)
+    #     ckpt = tf.train.get_checkpoint_state(model_config['logdir'])
+    #     if None and ckpt and ckpt.model_checkpoint_path:  # never load data so far
+    #         # TODO: load from ckpt
+    #         # Read from checkpoint
+    #         print('load model from "{}"...'.format(ckpt.model_checkpoint_path))
+    #         saver.restore(sess, ckpt.model_checkpoint_path)
+    #         graph = None
+    #     else:
+    #     # Leave variables randomized
+    #         print('Random initialize variables...')
+    #         graph = sess.graph
+    #     train_writer = tf.summary.FileWriter(
+    #         path.join(model_config['logdir'], 'train'),
+    #         graph=graph)
+    #     valid_writer = tf.summary.FileWriter(path.join(model_config['logdir'], 'valid'))
 
     # # visualize features
     # features_var = tf.Variable(original_features.toarray(), name='features')
@@ -401,17 +399,11 @@ def train(model_config, sess, seed, data_split = None):
                 sess=sess,
                 save_path=path.join(model_config['logdir'], 'model.ckpt'),
                 global_step=global_step)))
-    # print(time.time()-very_begining)
+    print("Total time={}s".format(time.time()-very_begining))
     return test_acc, test_acc_of_class, prediction
 
 
 if __name__ == '__main__':
-    # Parse args
-    parser = argparse.ArgumentParser(description=(
-        "This is used to train and test Graph Convolution Network for node classification problem.\n"
-        "Most configuration are specified in config.py, please read it and modify it as you want."))
-    parser.add_argument("-v", "--verbose", action="store_true")
-    args = parser.parse_args()
 
     acc = [[] for i in configuration['model_list']]
     acc_of_class = [[] for i in configuration['model_list']]

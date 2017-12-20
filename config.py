@@ -3,6 +3,8 @@ import time
 from copy import deepcopy
 from os import cpu_count
 from gcn.utils import preprocess_model_config
+import argparse
+import pprint
 # Model 11: nearest weighted
 # Model 12: see draft
 # Model 13: Model 9 + Model 11
@@ -26,7 +28,7 @@ configuration ={
     # The default model configuration
     'default':{
         'dataset'           : 'cora',     # 'Dataset string. (cora | citeseer | pubmed | CIFAR-Fea | USPS-Fea)'
-        'train_size'        : 1,         # if train_size is a number, then use TRAIN_SIZE%% data to train model
+        'train_size'        : 0.5,         # if train_size is a number, then use TRAIN_SIZE%% labels.
         # 'train_size'        : [20, 20, 20, 20, 20, 20, 20], # if train_size is a list of numbers, then it specifies training lables for each class.
         'validation_size'   : 20,           # 'Use VALIDATION_SIZE% data to train model'
         'validate'          : True,        # Whether use validation set
@@ -117,25 +119,24 @@ configuration ={
             'connection'    : 'ff',
         },
         {
+            'Model' :22,
+            'alpha' : 1,
+            'connection'    : 'ff',
+        },
+        {
+            'Model' :22,
+            'alpha' : 2,
+            'connection'    : 'ff',
+        },
+        {
+            'Model' :22,
+            'alpha' : 5,
+            'connection'    : 'ff',
+        },
+        {
             'Model' :0,
             'connection'    : 'cc',
         },
-        # {
-        #     'Model'     : 0,
-        # },
-        # # {
-        # #     'Model'     : 0,
-        # #     'conv'      : 'taubin',
-        # #     'connection': 'cf',
-        # #     'taubin_lambda'     : 0.3,
-        # #     'taubin_mu'         : -0.31,
-        # #     'taubin_repeat'     : 100,
-        # # },
-        # {
-        #     'Model'     : 19,
-        #     # 'connection': 'ff',
-        #     # 'alpha'     : 0.2,
-        # },
         # {
         #     'Model'     : 0,
         #     'conv'      : 'taubin',
@@ -146,6 +147,29 @@ configuration ={
         # },
     ]
 }
+
+# Parse args
+parser = argparse.ArgumentParser(description=(
+    "This is used to train and test Graph Convolution Network for node classification problem.\n"
+    "Most configuration are specified in config.py, please read it and modify it as you want."))
+parser.add_argument("-v", "--verbose", action="store_true")
+parser.add_argument("--dataset", type=str)
+parser.add_argument("--train_size", type=float)
+parser.add_argument("--repeating", type=int)
+parser.add_argument("--validate", type=bool)
+
+args = parser.parse_args()
+print(args)
+if args.dataset is not None:
+    configuration['default']['dataset'] = args.dataset
+if args.train_size is not None:
+    configuration['default']['train_size'] = args.train_size
+if args.repeating is not None:
+    configuration['repeating']=args.repeating
+if args.validate is not None:
+    configuration['default']['validate']=args.validate
+pprint.PrettyPrinter(indent=4).pprint(configuration)
+# exit()
 
 def set_default_attr(model):
     model_config = deepcopy(configuration['default'])
