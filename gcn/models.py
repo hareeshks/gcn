@@ -1,4 +1,4 @@
-from gcn.layers import Dense, GraphConvolution
+from gcn.layers import DenseNet, GraphConvolution, Residual, FullyConnected, ConvolutionDenseNet
 from gcn.metrics import masked_accuracy, masked_softmax_cross_entropy
 import tensorflow as tf
 from copy import copy
@@ -19,6 +19,7 @@ class GCN_MLP(object):
 
         self.placeholders = placeholders
         self.inputs = placeholders['features']
+        self.inputs._my_input_dim = input_dim
         self.input_dim = input_dim
         # self.input_dim = self.inputs.get_shape()[1]  # To be supported in future Tensorflow versions
         self.output_dim = placeholders['labels'].get_shape().as_list()[1] if model_config['Model'] not in [11, 13, 14, 15] else \
@@ -41,20 +42,18 @@ class GCN_MLP(object):
 
     def build(self):
         layer_type = list(map(
-            lambda x: {'c': GraphConvolution, 'd': Dense}.get(x),
+            lambda x: {'c': GraphConvolution, 'd': DenseNet, 'r':Residual, 'f': FullyConnected, 'C': ConvolutionDenseNet}.get(x),
             self.model_config['connection']))
         layer_size = copy(self.model_config['layer_size'])
         layer_size.insert(0, self.input_dim)
         layer_size.append(self.output_dim)
         sparse = True
         with tf.name_scope(self.name):
-            # create Variables
             self.global_step = tf.Variable(0, name='global_step', trainable=False)
-            for input_dim, output_dim, layer_cls in \
-                    zip(layer_size[:-1],
-                        layer_size[1:],
-                        layer_type):
-                self.layers.append(layer_cls(input_dim=input_dim,
+            self.activations.append(self.inputs)
+            for output_dim, layer_cls in zip(layer_size[1:], layer_type):
+                # create Variables
+                self.layers.append(layer_cls(input=self.activations[-1],
                                              output_dim=output_dim,
                                              placeholders=self.placeholders,
                                              act=self.act,
@@ -63,12 +62,10 @@ class GCN_MLP(object):
                                              logging=self.logging,
                                              use_theta= self.model_config['conv'] == 'chebytheta'))
                 sparse = False
-
-            # Build sequential layer model
-            self.activations.append(self.inputs)
-            for layer in self.layers:
-                hidden = layer(self.activations[-1])  # build the graph, give layer inputs, return layer outpus
+                # Build sequential layer model
+                hidden = self.layers[-1]()  # build the graph, give layer inputs, return layer outpus
                 self.activations.append(hidden)
+
             self.outputs = self.activations[-1]
 
         # Store model variables for easy access

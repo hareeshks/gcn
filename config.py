@@ -17,10 +17,11 @@ from gcn.utils import preprocess_model_config
 # 18 self learning with label propagation
 # Model 19: gcn and lp
 #           'Model19' : 'union',        # 'union' | 'intersection'
+# 22 LP with features
 # validate: (True | False) Whether use validation set
 configuration ={
     # repeating times
-    'repeating'             : 1,
+    'repeating'             : 3,
 
     # The default model configuration
     'default':{
@@ -28,24 +29,21 @@ configuration ={
         'train_size'        : 1,         # if train_size is a number, then use TRAIN_SIZE%% data to train model
         # 'train_size'        : [20, 20, 20, 20, 20, 20, 20], # if train_size is a list of numbers, then it specifies training lables for each class.
         'validation_size'   : 20,           # 'Use VALIDATION_SIZE% data to train model'
-        'validate'          : False,        # Whether use validation set
-        'conv'              : 'gcn',        # 'conv type. (gcn | cheby | chebytheta | gcn_rw)'
+        'validate'          : True,        # Whether use validation set
+        'conv'              : 'gcn',        # 'conv type. (gcn | cheby | chebytheta | gcn_rw | taubin)'
         'max_degree'        : 2,            # 'Maximum Chebyshev polynomial degree.'
         'learning_rate'     : 0.02,         # 'Initial learning rate.'
         'epochs'            : 200,          # 'Number of epochs to train.'
 
         # config the absorption probability
         'Model'             : 0,
-        # if Model == 0 do not construct new adjacency matrix
-        # if Model == 1, use Model1
-        # if Model == 2, use Model2
         # 's'                 : 100,
         # 's' in the construction of  absorption probability
         # if s = -1 and Model == 1, non zero elements in each row equals to the original adjacency matrix
         'alpha'             : 1e-6,         # 'alpha' in the construction of  absorption probability
         'absorption_type'   : 'binary',     # When Model == 1, the new constructed adjacency matrix is either 'binary' or 'weighted'
         'mu'                : 1,          # 'mu' in the Model5
-        't'                 : -1,           # In model9, top 't' nodes will be reserved.
+        't'                 : 500,           # In model9, top 't' nodes will be reserved.
         't2'                : 100,          # In model 21
         'lambda'            : 0,
         'Model11'           : 'nearest',     # 'weighted' | 'nearest'
@@ -53,11 +51,17 @@ configuration ={
         'Model_to_add_label': { 'Model' :0 }, # for model 16
         'Model_to_predict'  : { 'Model' :0 }, # for model 16
         'Model19'           : 'union',        # 'union' | 'intersection'
+        'taubin_lambda'     : 0.3,
+        'taubin_mu'         : -0.31,
+        'taubin_repeat'     : 5,
+        'taubin_f'          : 0.7,
+        'taubin_t'          : 0.2,
 
         'connection'        : 'cc',
-        # A string contains only char "c" or "d".
+        # A string contains only char "c" or "f" or "d".
         # "c" stands for convolution.
-        # "d" stands for dense.
+        # "f" stands for fully connected.
+        # "d" stands for dense net.
         # See layer_size for details.
 
         'layer_size'        : [16],
@@ -75,7 +79,7 @@ configuration ={
         # Non positive value means never early stop.'
 
         'random_seed'       : int(time.time()),     #'Random seed.'
-        'feature'           : 'bow',        # 'bow (bag of words) or tfidf.'
+        'feature'           : 'bow',        # 'bow' | 'tfidf' | 'none'.
 
         'logging'           : False,         # 'Weather or not to record log'
         'logdir'            : '',           # 'Log directory.''
@@ -92,44 +96,54 @@ configuration ={
     # The list of model to be train.
     # Only configurations that's different with default are specified here
     'model_list':[
-        # \textbf{ParWalk} \\
         {
-            'Model' : 17,
-
+            'Model' :22,
+            'alpha' : 0.05,
+            'connection'    : 'ff',
         },
-        # \textbf{Chebyshev}
         {
-            'Model' : 0,
-            'conv'  : 'cheby',
+            'Model' :22,
+            'alpha' : 0.1,
+            'connection'    : 'ff',
         },
-        # \textbf{\tiny GCN without Validation}\\
         {
-            'Model'     : 0,
-            'validate'  : False,
+            'Model' :22,
+            'alpha' : 0.3,
+            'connection'    : 'ff',
         },
-        # \textbf{\tiny GCN with Validation} \\
         {
-            'Model'     : 0,
-            'validate'  : True,
+            'Model' :22,
+            'alpha' : 0.5,
+            'connection'    : 'ff',
         },
-        # \textbf{Co-training}  \\
         {
-            'Model'     : 9,
+            'Model' :0,
+            'connection'    : 'cc',
         },
-        # \textbf{Self-traing}   \\
-        {
-            'Model'     : 16,
-        },
-        # \textbf{Union}\\
-        {
-            'Model'     : 19,
-            'Model19'   : 'union',
-        },
-        # \textbf{Intersection}\\
-        {
-            'Model'     : 19,
-            'Model19'   : 'intersection',
-        },
+        # {
+        #     'Model'     : 0,
+        # },
+        # # {
+        # #     'Model'     : 0,
+        # #     'conv'      : 'taubin',
+        # #     'connection': 'cf',
+        # #     'taubin_lambda'     : 0.3,
+        # #     'taubin_mu'         : -0.31,
+        # #     'taubin_repeat'     : 100,
+        # # },
+        # {
+        #     'Model'     : 19,
+        #     # 'connection': 'ff',
+        #     # 'alpha'     : 0.2,
+        # },
+        # {
+        #     'Model'     : 0,
+        #     'conv'      : 'taubin',
+        #     'connection'        : 'cf',
+        #     'taubin_lambda'     : 1,
+        #     'taubin_mu'         : 0,
+        #     'taubin_repeat'     : 3,
+        # },
     ]
 }
 

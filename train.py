@@ -10,7 +10,7 @@ from os import path
 from gcn.utils import construct_feed_dict, preprocess_features, drop_inter_class_edge,\
     preprocess_adj, chebyshev_polynomials, load_data, sparse_to_tuple, \
     Model1, Model2, Model3, Model4, Model5, Model6, Model7, Model8, Model9, \
-    Model10, Model11, Model12, Model16, Model17, Model19, Model20
+    Model10, Model11, Model12, Model16, Model17, Model19, Model20, Model22, taubin_smoothor
 from gcn.models import GCN_MLP
 
 from config import configuration
@@ -22,6 +22,7 @@ args = None
 
 def train(model_config, sess, seed, data_split = None):
     # Print model_config
+    very_begining = time.time()
     print('',
           'name           : {}'.format(model_config['name']),
           'logdir         : {}'.format(model_config['logdir']),
@@ -63,7 +64,7 @@ def train(model_config, sess, seed, data_split = None):
         }
     laplacian = sparse.diags(adj.sum(1).flat, 0) - adj
     laplacian = laplacian.astype(np.float32).tocoo()
-    if model_config['t'] < 0:
+    if not hasattr(model_config['t'], '__index__') and model_config['t'] < 0:
         eta = adj.shape[0]/(adj.sum()/adj.shape[0])**len(model_config['connection'])
         model_config['t'] = (y_train.sum(axis=0)*eta/y_train.sum()).astype(np.int64)
 
@@ -73,12 +74,12 @@ def train(model_config, sess, seed, data_split = None):
     elif model_config['Model'] in [1, 2, 3, 4]:
         # absorption probability
         print('Calculating Absorption Probability...',
-              's        :{}'.format(model_config['s']),
+              # 's        :{}'.format(model_config['s']),
               'alpha    :{}'.format(model_config['alpha']),
               'type     :{}'.format(model_config['absorption_type']),
               sep='\n')
         if model_config['Model'] == 1:
-            adj = Model1(adj, model_config['s'], model_config['alpha'], model_config['absorption_type'])
+            adj = Model1(adj, model_config['t'], model_config['alpha'], model_config['absorption_type'])
         elif model_config['Model'] == 2:
             adj = Model2(adj, model_config['s'], model_config['alpha'], y_train)
         elif model_config['Model'] == 3:
@@ -162,7 +163,9 @@ def train(model_config, sess, seed, data_split = None):
                 tf.set_random_seed(seed)
                 test_acc, test_acc_of_class, prediction = train(model_config['Model_to_add_label'], sub_sess, seed, data_split=data_split)
         stored_A = model_config['dataset'] + '_A_I'
+        # print(time.time()-very_begining)
         y_train, train_mask = Model19(prediction, model_config['t'], y_train, train_mask, adj, model_config['alpha'], stored_A, model_config['Model19'])
+        # print(time.time()-very_begining)
         model_config = model_config['Model_to_predict']
         print('',
               'name           : {}'.format(model_config['name']),
@@ -177,6 +180,10 @@ def train(model_config, sess, seed, data_split = None):
         pass
     elif model_config['Model'] == 21:
         pass
+    elif model_config['Model'] == 22:
+        alpha = model_config['alpha']
+        stored_A = model_config['dataset'] + '_A_I'
+        features = Model22(adj, features, alpha, stored_A)
     else:
         raise ValueError(
             '''model_config['Model'] must be in [0, 1, 2, 3, 4, 5，6，7, 8, 9, 10,'''
@@ -200,6 +207,9 @@ def train(model_config, sess, seed, data_split = None):
         model_config['name'] += '_k{}'.format(k)
         support = Model12(adj, k)
         num_supports = len(support)
+    elif model_config['conv'] == 'taubin':
+        support = [sparse_to_tuple(taubin_smoothor(adj, model_config['taubin_lambda'], model_config['taubin_mu'], model_config['taubin_repeat']))]
+        num_supports = 1
     elif model_config['conv'] == 'gcn':
         # origin_adj_support = [preprocess_adj(origin_adj)]
         support = [preprocess_adj(adj)]
@@ -217,7 +227,7 @@ def train(model_config, sess, seed, data_split = None):
     # Define placeholders
     placeholders = {
         'support': [tf.sparse_placeholder(tf.float32, name='support' + str(i)) for i in range(num_supports)],
-        'features': tf.sparse_placeholder(tf.float32, name='features', shape=tf.constant(features[2], dtype=tf.int64)),
+        'features': tf.sparse_placeholder(tf.float32, name='features', shape=np.array(features[2], dtype=np.int64)),
         'labels': tf.placeholder(tf.int32, name='labels', shape=(None, y_train.shape[1])),
         'labels_mask': tf.placeholder(tf.int32, name='labels_mask'),
         'dropout': tf.placeholder_with_default(0., name='dropout', shape=()),
@@ -391,7 +401,7 @@ def train(model_config, sess, seed, data_split = None):
                 sess=sess,
                 save_path=path.join(model_config['logdir'], 'model.ckpt'),
                 global_step=global_step)))
-
+    # print(time.time()-very_begining)
     return test_acc, test_acc_of_class, prediction
 
 

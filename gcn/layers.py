@@ -1,5 +1,6 @@
 from gcn.inits import *
 import tensorflow as tf
+import tensorflow.contrib.slim as slim
 
 # global unique layer ID dictionary for layer name assignment
 _LAYER_UIDS = {}
@@ -21,7 +22,7 @@ def sparse_dropout(x, keep_prob, noise_shape):
     random_tensor += tf.random_uniform(noise_shape)
     dropout_mask = tf.cast(tf.floor(random_tensor), dtype=tf.bool)
     pre_out = tf.sparse_retain(x, dropout_mask)
-    return pre_out * (1./keep_prob)
+    return pre_out * (1. / keep_prob)
 
 
 def dot(x, y, sparse=False):
@@ -48,7 +49,7 @@ class Layer(object):
         _log_vars(): Log all variables
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, input, **kwargs):
         allowed_kwargs = {'name', 'logging', 'use_theta'}
         for kwarg in kwargs.keys():
             assert kwarg in allowed_kwargs, 'Invalid keyword argument: ' + kwarg
@@ -61,15 +62,20 @@ class Layer(object):
         logging = kwargs.get('logging', False)
         self.logging = logging
         self.sparse_inputs = False
+        self.input = input
+        if isinstance(self.input, tf.SparseTensor):
+            self.input_dim = self.input._my_input_dim
+        else:
+            self.input_dim = self.input.get_shape()[1].value
 
-    def _call(self, inputs):
-        return inputs
+    def _call(self):
+        return self.input
 
-    def __call__(self, inputs):
-        with tf.name_scope(self.name+'_cal'):
+    def __call__(self):
+        with tf.name_scope(self.name + '_cal'):
             if self.logging and not self.sparse_inputs:
-                tf.summary.histogram(self.name + '/inputs', inputs)
-            outputs = self._call(inputs)
+                tf.summary.histogram(self.name + '/inputs', self.input)
+            outputs = self._call()
             if self.logging:
                 tf.summary.histogram(self.name + '/outputs', outputs)
             return outputs
@@ -80,11 +86,12 @@ class Layer(object):
         #     tf.summary.histogram(self.name + '/vars/' + var, self.vars[var])
 
 
-class Dense(Layer):
-    """Dense layer."""
-    def __init__(self, input_dim, output_dim, placeholders, dropout=0., sparse_inputs=False,
+class FullyConnected(Layer):
+    """Fully Connected Layer."""
+
+    def __init__(self, input, output_dim, placeholders, dropout=0., sparse_inputs=False,
                  act=tf.nn.relu, bias=False, featureless=False, **kwargs):
-        super(Dense, self).__init__(**kwargs)
+        super(self.__class__, self).__init__(input, **kwargs)
 
         if dropout:
             self.dropout = placeholders['dropout']
@@ -95,6 +102,8 @@ class Dense(Layer):
         self.sparse_inputs = sparse_inputs
         self.featureless = featureless
         self.bias = bias
+        self.output_dim = output_dim
+        input_dim = self.input_dim
 
         # helper variable for sparse dropout
         self.num_features_nonzero = placeholders['num_features_nonzero']
@@ -108,14 +117,14 @@ class Dense(Layer):
         if self.logging:
             self._log_vars()
 
-    def _call(self, inputs):
-        x = inputs
+    def _call(self):
+        x = self.input
 
         # dropout
         if self.sparse_inputs:
-            x = sparse_dropout(x, 1-self.dropout, self.num_features_nonzero)
+            x = sparse_dropout(x, 1 - self.dropout, self.num_features_nonzero)
         else:
-            x = tf.nn.dropout(x, 1-self.dropout)
+            x = tf.nn.dropout(x, 1 - self.dropout)
 
         # transform
         output = dot(x, self.vars['weights'], sparse=self.sparse_inputs)
@@ -129,16 +138,18 @@ class Dense(Layer):
 
 class GraphConvolution(Layer):
     """Graph convolution layer."""
-    def __init__(self, input_dim, output_dim, placeholders, dropout=0.,
+
+    def __init__(self, input, output_dim, placeholders, dropout=0.,
                  sparse_inputs=False, act=tf.nn.relu, bias=False,
                  featureless=False, use_theta=False, **kwargs):
-        super(GraphConvolution, self).__init__(**kwargs)
+        super(self.__class__, self).__init__(input, **kwargs)
 
         if dropout:
             self.dropout = placeholders['dropout']
         else:
             self.dropout = 0.
 
+        input_dim = self.input_dim
         self.act = act
         self.support = placeholders['support']
         self.sparse_inputs = sparse_inputs
@@ -153,7 +164,7 @@ class GraphConvolution(Layer):
                 self.vars['weight'] = glorot([input_dim, output_dim], name='weight')
                 for i in range(len(self.support)):
                     self.vars['theta_' + str(i)] = tf.constant(1, name='theta_' + str(i), dtype=tf.float32)
-                        # glorot((1,1), name='theta_' + str(i))
+                    # glorot((1,1), name='theta_' + str(i))
             else:
                 for i in range(len(self.support)):
                     self.vars['weights_' + str(i)] = glorot([input_dim, output_dim],
@@ -164,14 +175,14 @@ class GraphConvolution(Layer):
         if self.logging:
             self._log_vars()
 
-    def _call(self, inputs):
-        x = inputs
+    def _call(self):
+        x = self.input
 
         # dropout
         if self.sparse_inputs:
-            x = sparse_dropout(x, 1-self.dropout, self.num_features_nonzero)
+            x = sparse_dropout(x, 1 - self.dropout, self.num_features_nonzero)
         else:
-            x = tf.nn.dropout(x, 1-self.dropout)
+            x = tf.nn.dropout(x, 1 - self.dropout)
 
         # convolve
         supports = list()
@@ -179,9 +190,9 @@ class GraphConvolution(Layer):
             if self.use_theta:
                 H = None
                 if H != None:
-                    H = tf.sparse_add(H, self.support[i]*self.vars['theta_' + str(i)])
+                    H = tf.sparse_add(H, self.support[i] * self.vars['theta_' + str(i)])
                 else:
-                    H = self.support[i]*self.vars['theta_' + str(i)]
+                    H = self.support[i] * self.vars['theta_' + str(i)]
             else:
                 if not self.featureless:
                     pre_sup = dot(x, self.vars['weights_' + str(i)],
@@ -201,3 +212,176 @@ class GraphConvolution(Layer):
             output += self.vars['bias']
 
         return self.act(output)
+
+
+class Residual(Layer):
+    """Dense layer."""
+
+    def __init__(self, input, output_dim, placeholders, dropout=0., sparse_inputs=False,
+                 act=tf.nn.relu, bias=False, featureless=False, **kwargs):
+        super(self.__class__, self).__init__(input, **kwargs)
+
+        if dropout:
+            self.dropout = placeholders['dropout']
+        else:
+            self.dropout = 0.
+
+        self.act = act
+        self.sparse_inputs = sparse_inputs
+        self.featureless = featureless
+        self.bias = bias
+        self.output_dim = output_dim
+        input_dim = self.input_dim
+
+        # helper variable for sparse dropout
+        self.num_features_nonzero = placeholders['num_features_nonzero']
+
+        # with tf.name_scope(self.name):
+        #     self.vars['weights'] = glorot([input_dim, output_dim],
+        #                                   name='weights')
+        #     if self.bias:
+        #         self.vars['bias'] = zeros([output_dim], name='bias')
+
+        if self.logging:
+            self._log_vars()
+
+    def _call(self):
+
+        # # dropout
+        # if self.sparse_inputs:
+        #     inputs = sparse_dropout(inputs, 1-self.dropout, self.num_features_nonzero)
+        # else:
+        #     inputs = tf.nn.dropout(inputs, 1-self.dropout)
+
+        bias = tf.python.ops.init_ops.zeros_initializer() if self.bias else None
+        output = slim.fully_connected(self.input, self.output_dim,
+                                      activation_fn=self.act,
+                                      biases_initializer=bias)
+        return output + self.input
+
+
+class DenseNet(Layer):
+    """Dense layer."""
+
+    def __init__(self, input, output_dim, placeholders, dropout=0., sparse_inputs=False,
+                 act=tf.nn.relu, bias=False, featureless=False, **kwargs):
+        super(self.__class__, self).__init__(input, **kwargs)
+
+        if dropout:
+            self.dropout = placeholders['dropout']
+        else:
+            self.dropout = 0.
+
+        self.act = act
+        self.sparse_inputs = sparse_inputs
+        self.featureless = featureless
+        self.bias = bias
+        self.output_dim = output_dim
+        input_dim = self.input_dim
+
+        # helper variable for sparse dropout
+        self.num_features_nonzero = placeholders['num_features_nonzero']
+
+        with tf.name_scope(self.name):
+            self.vars['weights'] = glorot([input_dim, output_dim],
+                                          name='weights')
+            if self.bias:
+                self.vars['bias'] = zeros([output_dim], name='bias')
+
+        if self.logging:
+            self._log_vars()
+
+    def _call(self):
+        x = self.input
+
+        # dropout
+        if self.sparse_inputs:
+            x = sparse_dropout(x, 1 - self.dropout, self.num_features_nonzero)
+        else:
+            x = tf.nn.dropout(x, 1 - self.dropout)
+
+        # transform
+        output = dot(x, self.vars['weights'], sparse=self.sparse_inputs)
+
+        # bias
+        if self.bias:
+            output += self.vars['bias']
+
+        return tf.concat([self.act(output), self.input], axis=1)
+
+class ConvolutionDenseNet(Layer):
+    """Graph convolution layer."""
+
+    def __init__(self, input, output_dim, placeholders, dropout=0.,
+                 sparse_inputs=False, act=tf.nn.relu, bias=False,
+                 featureless=False, use_theta=False, **kwargs):
+        super(self.__class__, self).__init__(input, **kwargs)
+
+        if dropout:
+            self.dropout = placeholders['dropout']
+        else:
+            self.dropout = 0.
+
+        input_dim = self.input_dim
+        self.act = act
+        self.support = placeholders['support']
+        self.sparse_inputs = sparse_inputs
+        self.featureless = featureless
+        self.bias = bias
+        self.use_theta = use_theta
+        # helper variable for sparse dropout
+        self.num_features_nonzero = placeholders['num_features_nonzero']
+
+        with tf.name_scope(self.name):
+            if use_theta:
+                self.vars['weight'] = glorot([input_dim, output_dim], name='weight')
+                for i in range(len(self.support)):
+                    self.vars['theta_' + str(i)] = tf.constant(1, name='theta_' + str(i), dtype=tf.float32)
+                    # glorot((1,1), name='theta_' + str(i))
+            else:
+                for i in range(len(self.support)):
+                    self.vars['weights_' + str(i)] = glorot([input_dim, output_dim],
+                                                            name='weights_' + str(i))
+            if self.bias:
+                self.vars['bias'] = zeros([output_dim], name='bias')
+
+        if self.logging:
+            self._log_vars()
+
+    def _call(self):
+        x = self.input
+
+        # dropout
+        if self.sparse_inputs:
+            x = sparse_dropout(x, 1 - self.dropout, self.num_features_nonzero)
+        else:
+            x = tf.nn.dropout(x, 1 - self.dropout)
+
+        # convolve
+        supports = list()
+        for i in range(len(self.support)):
+            if self.use_theta:
+                H = None
+                if H != None:
+                    H = tf.sparse_add(H, self.support[i] * self.vars['theta_' + str(i)])
+                else:
+                    H = self.support[i] * self.vars['theta_' + str(i)]
+            else:
+                if not self.featureless:
+                    pre_sup = dot(x, self.vars['weights_' + str(i)],
+                                  sparse=self.sparse_inputs)
+                else:
+                    pre_sup = self.vars['weights_' + str(i)]
+                support = dot(self.support[i], pre_sup, sparse=True)
+                supports.append(support)
+
+        if self.use_theta:
+            output = dot(H, dot(x, self.vars['weight'], sparse=self.sparse_inputs), sparse=True)
+        else:
+            output = tf.add_n(supports)
+
+        # bias
+        if self.bias:
+            output += self.vars['bias']
+
+        return tf.concat([self.act(output), self.input], axis=1)

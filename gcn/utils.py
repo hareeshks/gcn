@@ -5,15 +5,16 @@ import pickle as pkl
 import networkx as nx
 import scipy.io as sio
 import scipy.sparse as sp
-import scipy.linalg as slinalg
+import scipy.sparse.linalg as slinalg
+import scipy.linalg as linalg
 from scipy.sparse.linalg.eigen.arpack import eigsh
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.preprocessing import normalize
 import sys
-import tensorflow as tf
 from os import path
 import copy
 import os
+import time
 
 def save_sparse_csr(filename,array):
     np.savez(filename,data = array.data ,indices=array.indices,
@@ -75,6 +76,7 @@ def load_data(dataset_str, train_size, validation_size):
         ty = ty_extended
 
     features = sp.vstack((allx, tx)).tolil()
+    # features = sp.eye(features.shape[0]).tolil()
     # features = sp.lil_matrix(allx)
 
     labels = np.vstack((ally, ty))
@@ -138,8 +140,8 @@ def load_data(dataset_str, train_size, validation_size):
                 idx_train = idx[0:int(len(idx) * train_size // 100)]
                 labels_of_class = np.sum(labels[idx_train], axis=0)
         print('labels of each class : ',np.sum(labels[idx_train], axis=0))
-        idx_val = idx[-1000-validation_size:-1000]
-        idx_test = idx[-1000:]
+        idx_val = idx[-500-validation_size:-500]
+        idx_test = idx[-500:]
             # idx_val = idx[len(idx) * train_size // 100:len(idx) * (train_size // 2 + 50) // 100]
             # idx_test = idx[len(idx) * (train_size // 2 + 50) // 100:len(idx)]
 
@@ -204,6 +206,8 @@ def preprocess_features(features, feature_type):
     elif feature_type == 'tfidf':
         transformer = TfidfTransformer(norm=None, use_idf=True, smooth_idf=True, sublinear_tf=False)
         features = transformer.fit_transform(features)
+    elif feature_type == 'none':
+        features = sp.csr_matrix(sp.eye(features.shape[0]))
     else:
         raise ValueError('Invalid feature type: ' + str(feature_type))
     return features
@@ -261,7 +265,10 @@ def chebyshev_polynomials(adj, k):
 def Model1(W, s, alpha, absorption_type):
     count = np.sum(W, axis=1).flatten() + 1
     L = np.diag(W.sum(1).flat) - W
-    A = np.array(np.linalg.inv(L + alpha * np.eye(W.shape[0])))
+    L = L + alpha * np.eye(W.shape[0])
+    print(time.time())
+    A = np.array(np.linalg.inv(L))
+    print(time.time())
     sorted = -np.sort(-A, axis=1)
     if s == -1:
         gate = sorted[np.arange(sorted.shape[0]), count]
@@ -515,21 +522,50 @@ def Model8(W, s, alpha, y_train, train_mask):
     return y_train, train_mask
 
 
-def absorption_probability(W, alpha, stored_A = None):
+def absorption_probability(W, alpha, stored_A = None, column=None):
     try:
         A = np.load(stored_A+str(alpha)+'.npy')
         print('load A from '+ stored_A+str(alpha)+'.npy')
+        if column is not None:
+            return A[:, column]
+        else:
+            return A
+        # raise Exception('DEBUG')
     except:
+        # W=sp.csr_matrix([[0,1],[1,0]])
+        # alpha = 1
+        n = W.shape[0]
         print('Calculate absorption probability...')
         W = W.copy().astype(np.float32)
         D = W.sum(1).flat
         L = np.diag(D) - W
         L += alpha * np.eye(W.shape[0], dtype=L.dtype)
         # print(np.linalg.det(L))
-        A = np.array(slinalg.inv(L, overwrite_a=True))
-        if stored_A:
-            np.save(stored_A+str(alpha)+'.npy', A)
-    return A
+
+        if column is not None:
+            L=sp.csr_matrix(L)
+            A = np.zeros(W.shape)
+            # start = time.time()
+            A[:, column]=slinalg.spsolve(L, np.eye(L.shape[0])[:, column])
+            # print(time.time()-start)
+            return A
+        else:
+            # start = time.time()
+            A = np.array(linalg.inv(L, overwrite_a=True))
+            # print(time.time()-start)
+            if stored_A:
+                np.save(stored_A+str(alpha)+'.npy', A)
+            return A
+        # fletcher_reeves
+
+        # slinalg.solve(L, np.ones(L.shape[0]))
+        # A_ = np.zeros(W.shape)
+        # I = sp.eye(n)
+        # Di = sp.diags(np.divide(1,np.array(D)+alpha))
+        # for i in range(10):
+        #     # A_=
+        #     A_ = Di*(I+W.dot(A_))
+        # print(time.time()-start)
 
 def gaussian_seidel(A,B):
     X = np.ones(B.shape)
@@ -543,8 +579,27 @@ def gaussian_seidel(A,B):
         X = (B-R.dot(X))/D
     return X
 
+def fletcher_reeves(A,B):
+    # A=np.array(A)
+    X=np.zeros(B.shape)
+    r=np.array(B-A.dot(X))
+    rsold = (r*r).sum(0)
+    p=r
+    for i in range(10):
+        Ap = np.array(A.dot(p))
+        pAp = (p*Ap).sum(0)
+        alpha = rsold/pAp
+        X+=alpha*p
+        r -= alpha*Ap
+        rsnew = (r*r).sum(0)
+        if True:
+            pass
+        p=r+rsnew/rsold*p
+        rsold = rsnew
+    return X
+
 def Model9(W, t, alpha, y_train, train_mask, features, stored_A = None):
-    A = absorption_probability(W, alpha, stored_A)
+    A = absorption_probability(W, alpha, stored_A, train_mask)
     y_train = y_train.copy()
     train_index = np.where(train_mask)[0]
     already_labeled = np.sum(y_train, axis=1)
@@ -680,9 +735,16 @@ def Model16(prediction, t, y_train, train_mask):
 
 
 def Model17(adj, alpha, y_train, train_mask, y_test, stored_A = None):
-    P = absorption_probability(adj, alpha, stored_A=stored_A)
+    P = absorption_probability(adj, alpha, stored_A=stored_A, column=train_mask)
+    # # weighted classifier
+    # prediction = np.zeros(y_train.shape)
+    # prediction[np.arange(y_train.shape[0]),np.argmax(P.dot(y_train), axis=1)] = 1
+    # test_acc = np.sum(prediction*y_test)/np.sum(y_test)
+    # test_acc_of_class = np.sum(prediction*y_test, axis=0)/np.sum(y_test, axis=0)
+    # print(test_acc, test_acc_of_class)
     P = P[:,train_mask]
 
+    # nearest clssifier
     predicted_labels = np.argmax(P, axis=1)
     prediction = np.zeros(P.shape)
     prediction[np.arange(P.shape[0]), predicted_labels] = 1
@@ -694,6 +756,7 @@ def Model17(adj, alpha, y_train, train_mask, y_test, stored_A = None):
 
     test_acc = np.sum(prediction*y_test)/np.sum(y_test)
     test_acc_of_class = np.sum(prediction*y_test, axis=0)/np.sum(y_test, axis=0)
+    # print(test_acc, test_acc_of_class)
     return test_acc, test_acc_of_class, prediction
 
 
@@ -718,7 +781,7 @@ def Model19(prediction, t, y_train, train_mask, W, alpha, stored_A, union_or_int
                 count[j] += 1
 
     # lp
-    A = absorption_probability(W, alpha, stored_A)
+    A = absorption_probability(W, alpha, stored_A, train_mask)
     train_index = np.where(train_mask)[0]
     already_labeled = np.sum(y_train, axis=1)
     index_lp = []
@@ -773,7 +836,7 @@ def Model20(prediction, t, y_train, train_mask, W, alpha, stored_A):
     prediction[np.arange(len(predicted_labels)), predicted_labels] = 1.0
 
     # lp
-    A = absorption_probability(W, alpha, stored_A)
+    A = absorption_probability(W, alpha, stored_A, train_mask)
     train_index = np.where(train_mask)[0]
     already_labeled = np.sum(y_train, axis=1)
     index_lp = []
@@ -804,6 +867,51 @@ def Model20(prediction, t, y_train, train_mask, W, alpha, stored_A):
     print()
     return y_train, train_mask
 
+def Model22(adj, features, alpha, stored_A=None):
+    P = absorption_probability(adj, alpha, stored_A=stored_A)
+    return sp.csr_matrix(P*alpha*features)
+
+def taubin_smoothor(adj, lam, mu, repeat):
+    n = adj.shape[0]
+    adj = normalize(adj + sp.eye(adj.shape[0]), norm='l1', axis=1)
+    smoothor = sp.eye(n) * (1-lam) + lam * adj
+    inflator = sp.eye(n) * (1-mu) + mu * adj
+    step_transformor = smoothor*inflator
+
+    # # eigenvalue truncation
+    # vals, vecs = slinalg.eig(adj.toarray())
+    # vals = vals.astype(np.float64)
+    # vec_inv = np.linalg.inv(vecs)
+    # idx = np.argsort(vals)
+    # idx = idx[-88:]
+    # vals = vals[idx]
+    # vecs = vecs[:,idx]
+    # adj = vecs.dot(np.diag(vals)).dot(vec_inv[idx,:])
+    # return sp.csr_matrix(adj)
+
+    # # band-pass filter
+    # f = 1.0
+    # t = 0.1
+    # d = 2
+    # repeat = int(1/np.log2(d*d/(d*d-t*t)))
+    # step_transformor = (adj - (f-d)*sp.eye(adj.shape[0]))*(adj - (f+d)*sp.eye(adj.shape[0]))*(-1/d/d)
+    #
+    # return sp.csr_matrix(np.linalg.matrix_power(step_transformor.toarray(), n=repeat))
+
+    step_transformor = smoothor*inflator
+    transformor = sp.eye(n)
+    # for i in range(repeat):
+    #     transformor *= step_transformor
+
+    transformor = sp.eye(n)
+    base = step_transformor
+    while repeat!=0 :
+        if repeat%2 :
+            transformor *= base
+        base *= base
+        repeat //= 2
+        print(repeat)
+    return transformor
 
 all_labels = None
 # dataset = None
@@ -835,12 +943,12 @@ def preprocess_model_config(model_config):
     model_config['connection'] = list(model_config['connection'])
     # judge if parameters are legal
     for c in model_config['connection']:
-        if c not in ['c', 'd']:
+        if c not in ['c', 'd', 'r', 'f', 'C']:
             raise ValueError(
-                'connection string specified by --connection can only contain "c" or "d", but "{}" found' % c)
+                'connection string specified by --connection can only contain "c", "d", "r", "f", "C" but "{}" found'.format(c))
     for i in model_config['layer_size']:
         if not isinstance(i, int):
-            raise ValueError('layer_size should be a list of int, but found {}' % model_config['layer_size'])
+            raise ValueError('layer_size should be a list of int, but found {}'.format(model_config['layer_size']))
         if i <= 0:
             raise ValueError('layer_size must be greater than 0, but found {}' % i)
     if not len(model_config['connection']) == len(model_config['layer_size']) + 1:
@@ -854,11 +962,15 @@ def preprocess_model_config(model_config):
             model_name += str(size) + char
         if model_config['conv'] == 'cheby':
             model_name += '_cheby' + str(model_config['max_degree'])
+        if model_config['conv'] == 'taubin':
+            model_name += '_taubin' + str(model_config['taubin_lambda'])\
+                          + '_' + str(model_config['taubin_mu'])\
+                          + '_' + str(model_config['taubin_repeat'])
         if model_config['validate']:
             model_name += '_validate'
         model_name += '_Model' + str(model_config['Model'])
         if model_config['Model'] in [1]:
-            model_name += '_s' + str(model_config['s']) + '_' + model_config['absorption_type'] + '_alpha_' + str(
+            model_name += '_' + model_config['absorption_type'] + '_alpha_' + str(
                 model_config['alpha'])
         if model_config['Model'] in [2, 3, 4, 7, 8]:
             model_name += '_s' + str(model_config['s']) + '_alpha_' + str(
@@ -937,6 +1049,8 @@ def preprocess_model_config(model_config):
             model_name += str(model_config['alpha']) + '_t' + str(model_config['t']).replace('[', '_').replace(']','_').replace(', ','_') \
                           + '_t2' + str(model_config['t2']).replace('[', '_').replace(']', '_').replace(', ', '_')
             model_config['epochs'] *= 2
+        if model_config['Model'] == 22:
+            model_name += '_alpha_' + str(model_config['alpha'])
         model_config['name'] = model_name
 
     # Generate logdir
@@ -979,3 +1093,13 @@ if __name__ == '__main__':
     inv = np.linalg.inv(L.toarray())
     X = gaussian_seidel(L, sp.eye(L.shape[0], dtype=L.dtype).tocsr()[:, train_mask])
     pass
+
+def pow3( a, b):
+    ans = 1
+    base = a
+    while(b!=0):
+        if(b%2):
+            ans *= base
+        base *= base
+        b //= 2
+    return ans
