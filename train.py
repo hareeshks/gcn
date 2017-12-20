@@ -184,8 +184,8 @@ def train(model_config, sess, seed, data_split = None):
         features = Model22(adj, features, alpha, stored_A)
     else:
         raise ValueError(
-            '''model_config['Model'] must be in [0, 1, 2, 3, 4, 5，6，7, 8, 9, 10,'''
-            ''' 11, 12, 13， 14， 15, 16, 17, 18], but is {} now'''.format(model_config['Model']))
+            '''model_config['Model'] must be in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,'''
+            ''' 11, 12, 13, 14, 15, 16, 17, 18], but is {} now'''.format(model_config['Model']))
 
     # Some preprocessing
     features = sparse_to_tuple(features)
