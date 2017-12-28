@@ -5,6 +5,7 @@ from os import cpu_count
 from gcn.utils import preprocess_model_config
 import argparse
 import pprint
+# import math
 # Model 11: nearest weighted
 # Model 12: see draft
 # Model 13: Model 9 + Model 11
@@ -21,17 +22,21 @@ import pprint
 #           'Model19' : 'union',        # 'union' | 'intersection'
 # 22 LP with features
 # validate: (True | False) Whether use validation set
+# 23 svm
+# 24 Test21
+# 25 Test22
+# 26 Model9+modify adjacency matrix
 configuration ={
     # repeating times
-    'repeating'             : 3,
+    'repeating'             : 1,
 
     # The default model configuration
     'default':{
         'dataset'           : 'cora',     # 'Dataset string. (cora | citeseer | pubmed | CIFAR-Fea | USPS-Fea)'
-        'train_size'        : 0.5,         # if train_size is a number, then use TRAIN_SIZE%% labels.
+        'train_size'        : 1,         # if train_size is a number, then use TRAIN_SIZE%% labels.
         # 'train_size'        : [20, 20, 20, 20, 20, 20, 20], # if train_size is a list of numbers, then it specifies training lables for each class.
         'validation_size'   : 20,           # 'Use VALIDATION_SIZE% data to train model'
-        'validate'          : True,        # Whether use validation set
+        'validate'          : False,        # Whether use validation set
         'conv'              : 'gcn',        # 'conv type. (gcn | cheby | chebytheta | gcn_rw | taubin)'
         'max_degree'        : 2,            # 'Maximum Chebyshev polynomial degree.'
         'learning_rate'     : 0.02,         # 'Initial learning rate.'
@@ -42,7 +47,6 @@ configuration ={
         # 's'                 : 100,
         # 's' in the construction of  absorption probability
         # if s = -1 and Model == 1, non zero elements in each row equals to the original adjacency matrix
-        'alpha'             : 1e-6,         # 'alpha' in the construction of  absorption probability
         'absorption_type'   : 'binary',     # When Model == 1, the new constructed adjacency matrix is either 'binary' or 'weighted'
         'mu'                : 1,          # 'mu' in the Model5
         't'                 : 500,           # In model9, top 't' nodes will be reserved.
@@ -53,11 +57,11 @@ configuration ={
         'Model_to_add_label': { 'Model' :0 }, # for model 16
         'Model_to_predict'  : { 'Model' :0 }, # for model 16
         'Model19'           : 'union',        # 'union' | 'intersection'
-        'taubin_lambda'     : 0.3,
-        'taubin_mu'         : -0.31,
-        'taubin_repeat'     : 5,
-        'taubin_f'          : 0.7,
-        'taubin_t'          : 0.2,
+        'classifier'        : 'svm',            # 'svm' | 'tree'
+        'svm_kernel'        : 'rbf',        # 'rbf' | 'poly' | 'rbf' | 'sigmoid'， model 23
+        'gamma'             : 1e-5,         # gamma for svm, see scikit-learn document, model 23
+        'svm_degree'        : 4,
+        'tree_depth'        : None,
 
         'connection'        : 'cc',
         # A string contains only char "c" or "f" or "d".
@@ -83,6 +87,16 @@ configuration ={
         'random_seed'       : int(time.time()),     #'Random seed.'
         'feature'           : 'bow',        # 'bow' | 'tfidf' | 'none'.
 
+        'smoothing'         : None,        # 'poly'| 'ap'  | 'taubin' | 'test21' | None
+        'alpha'             : 1e-6,         # 'alpha' in the construction of  absorption probability
+        'beta'              : 0.05,
+        'poly_parameters'   : [1,-2,1],           # coefficients of p(L_rw)
+        'taubin_lambda'     : 0.3,
+        'taubin_mu'         : -0.31,
+        'taubin_repeat'     : 5,
+        'taubin_f'          : 0.7,
+        'taubin_t'          : 0.2,
+
         'logging'           : False,         # 'Weather or not to record log'
         'logdir'            : '',           # 'Log directory.''
         'name'              : '',           # 'name of the model. Serve as an ID of model.'
@@ -97,54 +111,31 @@ configuration ={
 
     # The list of model to be train.
     # Only configurations that's different with default are specified here
-    'model_list':[
+    'model_list':
+    [
         {
-            'Model' :22,
-            'alpha' : 0.05,
-            'connection'    : 'ff',
-        },
+            'Model' : 0,
+            'connection'        : 'cc',
+            'conv'              : 'gcn',
+        }
+    ] +
+    [
         {
-            'Model' :22,
-            'alpha' : 0.1,
-            'connection'    : 'ff',
-        },
+            'Model' : 26,
+            'connection'        : 'cc',
+            'conv'              : 'gcn',
+            'alpha'             : alpha
+        } for alpha in [1e-6, 1e-3, 1e-1]
+    ] +
+    [
         {
-            'Model' :22,
-            'alpha' : 0.3,
-            'connection'    : 'ff',
-        },
-        {
-            'Model' :22,
-            'alpha' : 0.5,
-            'connection'    : 'ff',
-        },
-        {
-            'Model' :22,
-            'alpha' : 1,
-            'connection'    : 'ff',
-        },
-        {
-            'Model' :22,
-            'alpha' : 2,
-            'connection'    : 'ff',
-        },
-        {
-            'Model' :22,
-            'alpha' : 5,
-            'connection'    : 'ff',
-        },
-        {
-            'Model' :0,
-            'connection'    : 'cc',
-        },
-        # {
-        #     'Model'     : 0,
-        #     'conv'      : 'taubin',
-        #     'connection'        : 'cf',
-        #     'taubin_lambda'     : 1,
-        #     'taubin_mu'         : 0,
-        #     'taubin_repeat'     : 3,
-        # },
+            'Model': 0,
+            'connection': 'cc',
+            'conv': 'gcn',
+            'smoothing' : 'test21',
+            'alpha': alpha,
+            'beta' : beta
+        } for alpha in [0.1, 0.2, 0.3, 0.4, 0.5] for beta in [0.001, 0.005, 0.01]
     ]
 }
 
@@ -156,7 +147,7 @@ parser.add_argument("-v", "--verbose", action="store_true")
 parser.add_argument("--dataset", type=str)
 parser.add_argument("--train_size", type=float)
 parser.add_argument("--repeating", type=int)
-parser.add_argument("--validate", type=bool)
+parser.add_argument("--validate", type=bool, help='0 | 1')
 
 args = parser.parse_args()
 print(args)

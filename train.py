@@ -6,11 +6,12 @@ import tensorflow as tf
 from tensorflow.python.client import timeline
 import numpy as np
 from scipy import sparse
+from sklearn import svm, tree
 from os import path
 from gcn.utils import construct_feed_dict, preprocess_features, drop_inter_class_edge,\
     preprocess_adj, chebyshev_polynomials, load_data, sparse_to_tuple, \
     Model1, Model2, Model3, Model4, Model5, Model6, Model7, Model8, Model9, \
-    Model10, Model11, Model12, Model16, Model17, Model19, Model20, Model22, taubin_smoothor
+    Model10, Model11, Model12, Model16, Model17, Model19, Model20, Model22, taubin_smoothor, smooth, Model26
 from gcn.models import GCN_MLP
 
 from config import configuration, args
@@ -48,6 +49,9 @@ def train(model_config, sess, seed, data_split = None):
                       validation_size=model_config['validation_size'])
         # preprocess_features
         features = preprocess_features(features, feature_type=model_config['feature'])
+        features = smooth(features, adj, model_config['smoothing'],
+                          alpha=model_config['alpha'], beta=model_config['beta'], stored_A=model_config['dataset'] + '_A_I',
+                          poly_parameters=model_config['poly_parameters'])
         if model_config['drop_inter_class_edge']:
             adj = drop_inter_class_edge(adj)
         data_split = {
@@ -62,9 +66,10 @@ def train(model_config, sess, seed, data_split = None):
         }
     laplacian = sparse.diags(adj.sum(1).flat, 0) - adj
     laplacian = laplacian.astype(np.float32).tocoo()
-    if not hasattr(model_config['t'], '__index__') and model_config['t'] < 0:
+    if type(model_config['t'])==int and model_config['t'] < 0:
         eta = adj.shape[0]/(adj.sum()/adj.shape[0])**len(model_config['connection'])
-        model_config['t'] = (y_train.sum(axis=0)*eta/y_train.sum()).astype(np.int64)
+        model_config['t'] = (y_train.sum(axis=0)*3*eta/y_train.sum()).astype(np.int64)
+        print('t=',model_config['t'])
 
     # origin_adj = adj
     if model_config['Model'] == 0:
@@ -96,7 +101,7 @@ def train(model_config, sess, seed, data_split = None):
         y_train, train_mask = Model8(adj, model_config['s'], model_config['alpha'], y_train, train_mask)
     elif model_config['Model'] == 9:
         y_train, train_mask = Model9(adj, model_config['t'], model_config['alpha'],
-                                     y_train, train_mask, features, stored_A = model_config['dataset']+'_A_I')
+                                     y_train, train_mask, stored_A = model_config['dataset']+'_A_I')
     elif model_config['Model'] == 10:
         y_train, train_mask = Model10(adj, model_config['s'], model_config['t'], model_config['alpha'],
                                       y_train, train_mask, features, stored_A = model_config['dataset']+'_A_H')
@@ -107,7 +112,7 @@ def train(model_config, sess, seed, data_split = None):
         pass
     elif model_config['Model'] == 13:
         y_train, train_mask = Model9(adj, model_config['t'], model_config['alpha'],
-                                     y_train, train_mask, features, stored_A = model_config['dataset']+'_A_I')
+                                     y_train, train_mask, stored_A = model_config['dataset']+'_A_I')
         y = np.sum(train_mask)
         label_per_sample, sample2label = Model11(y, y_train, train_mask)
     elif model_config['Model'] == 14:
@@ -115,7 +120,7 @@ def train(model_config, sess, seed, data_split = None):
         label_per_sample, sample2label = Model11(y, y_train, train_mask)
     elif model_config['Model'] == 15:
         y_train, train_mask = Model9(adj, model_config['t'], model_config['alpha'],
-                                     y_train, train_mask, features, stored_A = model_config['dataset']+'_A_I')
+                                     y_train, train_mask, stored_A = model_config['dataset']+'_A_I')
         y = np.sum(train_mask)
         label_per_sample, sample2label = Model11(y, y_train, train_mask)
     elif model_config['Model'] == 16:
@@ -147,7 +152,7 @@ def train(model_config, sess, seed, data_split = None):
         return test_acc, test_acc_of_class, prediction
     elif model_config['Model'] == 18:
         y_train, train_mask = Model9(adj, model_config['t'], model_config['alpha'],
-                                 y_train, train_mask, features, stored_A=model_config['dataset'] + '_A_I')
+                                 y_train, train_mask, stored_A=model_config['dataset'] + '_A_I')
         alpha = 1e-6
         test_acc, test_acc_of_class, prediction = Model17(adj, alpha, y_train, train_mask, y_test,
                                                           stored_A=model_config['dataset'] + '_A_I')
@@ -182,6 +187,22 @@ def train(model_config, sess, seed, data_split = None):
         alpha = model_config['alpha']
         stored_A = model_config['dataset'] + '_A_I'
         features = Model22(adj, features, alpha, stored_A)
+    elif model_config['Model'] == 23:
+        clf = tree.DecisionTreeClassifier(max_depth=model_config['tree_depth'])
+        # clf = svm.SVC(kernel='rbf', gamma=model_config['gamma'], class_weight='balanced', degree=model_config['svm_degree'])
+        clf.fit(features[train_mask], np.argmax(y_train[train_mask], axis=1))
+        prediction = clf.predict(features[test_mask])
+        test_acc = np.sum(prediction == np.argmax(y_test[test_mask], axis=1))/np.sum(test_mask)
+        # test_acc = test_acc[0]
+        one_hot_prediction = np.zeros(y_test[test_mask].shape)
+        one_hot_prediction[np.arange(one_hot_prediction.shape[0]), prediction] = 1
+        test_acc_of_class = np.sum(one_hot_prediction*y_test[test_mask], axis=0)/np.sum(y_test[test_mask], axis=0) #TODO
+        print("Test set results: cost= {:.5f} accuracy= {:.5f} time= {:.5f}".format(0.,test_acc,0.))
+        print("accuracy of each class=", test_acc_of_class)
+        return test_acc, test_acc_of_class, prediction
+    elif model_config['Model'] == 26:
+        adj = Model26(adj, model_config['t'], model_config['alpha'],
+                                     y_train, train_mask, stored_A = model_config['dataset']+'_A_I')
     else:
         raise ValueError(
             '''model_config['Model'] must be in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,'''

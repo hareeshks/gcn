@@ -16,14 +16,17 @@ import copy
 import os
 import time
 
-def save_sparse_csr(filename,array):
-    np.savez(filename,data = array.data ,indices=array.indices,
-             indptr =array.indptr, shape=array.shape )
+
+def save_sparse_csr(filename, array):
+    np.savez(filename, data=array.data, indices=array.indices,
+             indptr=array.indptr, shape=array.shape)
+
 
 def load_sparse_csr(filename):
     loader = np.load(filename)
-    return sp.csr_matrix((  loader['data'], loader['indices'], loader['indptr']),
-                         shape = loader['shape'])
+    return sp.csr_matrix((loader['data'], loader['indices'], loader['indptr']),
+                         shape=loader['shape'])
+
 
 def parse_index_file(filename):
     """Parse index file."""
@@ -122,7 +125,7 @@ def load_data(dataset_str, train_size, validation_size):
         # split the data set
         idx = np.arange(len(labels))
         no_class = labels.shape[1]  # number of class
-        validation_size = validation_size*len(idx)//100
+        validation_size = validation_size * len(idx) // 100
         if hasattr(train_size, '__getitem__'):
             np.random.shuffle(idx)
             idx_train = []
@@ -135,15 +138,15 @@ def load_data(dataset_str, train_size, validation_size):
                         count[j] += 1
         else:
             labels_of_class = [0]
-            while(np.prod(labels_of_class) == 0):
+            while (np.prod(labels_of_class) == 0):
                 np.random.shuffle(idx)
                 idx_train = idx[0:int(len(idx) * train_size // 100)]
                 labels_of_class = np.sum(labels[idx_train], axis=0)
-        print('labels of each class : ',np.sum(labels[idx_train], axis=0))
-        idx_val = idx[-500-validation_size:-500]
+        print('labels of each class : ', np.sum(labels[idx_train], axis=0))
+        idx_val = idx[-500 - validation_size:-500]
         idx_test = idx[-500:]
-            # idx_val = idx[len(idx) * train_size // 100:len(idx) * (train_size // 2 + 50) // 100]
-            # idx_test = idx[len(idx) * (train_size // 2 + 50) // 100:len(idx)]
+        # idx_val = idx[len(idx) * train_size // 100:len(idx) * (train_size // 2 + 50) // 100]
+        # idx_test = idx[len(idx) * (train_size // 2 + 50) // 100:len(idx)]
 
         train_mask = sample_mask(idx_train, labels.shape[0])
         val_mask = sample_mask(idx_val, labels.shape[0])
@@ -213,29 +216,30 @@ def preprocess_features(features, feature_type):
     return features
 
 
-def normalize_adj(adj):
+def normalize_adj(adj, type='sym'):
     """Symmetrically normalize adjacency matrix."""
-    adj = sp.coo_matrix(adj)
-    rowsum = np.array(adj.sum(1))
-    # d_inv_sqrt = np.power(rowsum, -0.5)
-    # d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.
-    # return adj*d_inv_sqrt*d_inv_sqrt.flatten()
-    d_inv_sqrt = np.power(rowsum, -0.5).flatten()
-    d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.
-    d_mat_inv_sqrt = sp.diags(d_inv_sqrt)
-    return adj.dot(d_mat_inv_sqrt).transpose().dot(d_mat_inv_sqrt).tocoo()
+    if type == 'sym':
+        adj = sp.coo_matrix(adj)
+        rowsum = np.array(adj.sum(1))
+        # d_inv_sqrt = np.power(rowsum, -0.5)
+        # d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.
+        # return adj*d_inv_sqrt*d_inv_sqrt.flatten()
+        d_inv_sqrt = np.power(rowsum, -0.5).flatten()
+        d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.
+        d_mat_inv_sqrt = sp.diags(d_inv_sqrt)
+        return adj.dot(d_mat_inv_sqrt).transpose().dot(d_mat_inv_sqrt).tocoo()
+    elif type == 'rw':
+        rowsum = np.array(adj.sum(1))
+        d_inv = np.power(rowsum, -1.0).flatten()
+        d_inv[np.isinf(d_inv)] = 0.
+        d_mat_inv = sp.diags(d_inv)
+        adj_normalized = d_mat_inv.dot(adj)
+        return adj_normalized
 
 
 def preprocess_adj(adj, type='sym'):
     """Preprocessing of adjacency matrix for simple GCN model and conversion to tuple representation."""
-    if type == 'sym':
-        adj_normalized = normalize_adj(adj + sp.eye(adj.shape[0])) #
-    else:
-        adj = adj + sp.eye(adj.shape[0])
-        rowsum = np.array(adj.sum(1))
-        d_inv = np.power(rowsum, -1.0).flatten()
-        d_mat_inv = sp.diags(d_inv)
-        adj_normalized = d_mat_inv.dot(adj)
+    adj_normalized = normalize_adj(adj + sp.eye(adj.shape[0]), type=type)  #
     return sparse_to_tuple(adj_normalized)
 
 
@@ -245,19 +249,19 @@ def chebyshev_polynomials(adj, k):
 
     adj_normalized = normalize_adj(adj)
     laplacian = sp.eye(adj.shape[0]) - adj_normalized
-    largest_eigval, _ = eigsh(laplacian, 1, which='LM')
-    scaled_laplacian = (2. / largest_eigval[0]) * laplacian - sp.eye(adj.shape[0])
+    # largest_eigval, _ = eigsh(laplacian, 1, which='LM')
+    # scaled_laplacian = (2. / largest_eigval[0]) * laplacian - sp.eye(adj.shape[0])
 
     t_k = list()
     t_k.append(sp.eye(adj.shape[0]))
-    t_k.append(scaled_laplacian)
+    t_k.append(laplacian)
 
     def chebyshev_recurrence(t_k_minus_one, t_k_minus_two, scaled_lap):
         s_lap = sp.csr_matrix(scaled_lap, copy=True)
         return 2 * s_lap.dot(t_k_minus_one) - t_k_minus_two
 
     for i in range(2, k + 1):
-        t_k.append(chebyshev_recurrence(t_k[-1], t_k[-2], scaled_laplacian))
+        t_k.append(chebyshev_recurrence(t_k[-1], t_k[-2], laplacian))
 
     return sparse_to_tuple(t_k)
 
@@ -266,9 +270,9 @@ def Model1(W, s, alpha, absorption_type):
     count = np.sum(W, axis=1).flatten() + 1
     L = np.diag(W.sum(1).flat) - W
     L = L + alpha * np.eye(W.shape[0])
-    print(time.time())
+    # print(time.time())
     A = np.array(np.linalg.inv(L))
-    print(time.time())
+    # print(time.time())
     sorted = -np.sort(-A, axis=1)
     if s == -1:
         gate = sorted[np.arange(sorted.shape[0]), count]
@@ -363,17 +367,20 @@ def Model4(W, s, alpha, y_train, train_mask):
     train_mask = sample_mask(train_index, y_train.shape[0])
     return y_train, train_mask
 
+
 def drop_inter_class_edge(adj):
     adj_coo = adj.tocoo()
     L = all_labels.shape[1]
     class_pair_indicator = all_labels[adj_coo.row].reshape([-1, L, 1]) * all_labels[adj_coo.col].reshape([-1, 1, L])
     class_count = np.sum(class_pair_indicator, axis=0)
     same_class_indicator = np.trace(class_pair_indicator, axis1=1, axis2=2)
-    W = sp.coo_matrix((np.ones(np.sum(same_class_indicator>0)), (adj_coo.row[same_class_indicator>0],adj_coo.col[same_class_indicator>0])), shape=adj.shape)
+    W = sp.coo_matrix((np.ones(np.sum(same_class_indicator > 0)),
+                       (adj_coo.row[same_class_indicator > 0], adj_coo.col[same_class_indicator > 0])), shape=adj.shape)
     adj_coo = W.tocoo()
     class_pair_indicator = all_labels[adj_coo.row].reshape([-1, L, 1]) * all_labels[adj_coo.col].reshape([-1, 1, L])
     class_count = np.sum(class_pair_indicator, axis=0)
     return W
+
 
 def Model5(features, adj, mu, gate=None):
     # features = sp.lil_matrix([
@@ -391,9 +398,9 @@ def Model5(features, adj, mu, gate=None):
     L = all_labels.shape[1]
 
     I = sp.eye(adj.shape[0])
-    local_weight = I + adj*(I + adj)
+    local_weight = I + adj * (I + adj)
     local_weight = local_weight.sqrt()
-    local_features = np.array(local_weight.dot(features)/np.sum(local_weight, axis=1))
+    local_features = np.array(local_weight.dot(features) / np.sum(local_weight, axis=1))
     D2 = np.sum((local_features[adj_coo.row] - local_features[adj_coo.col]) ** 2, axis=1)
     D = D2 ** 0.5
     d_mean = np.mean(D)
@@ -438,7 +445,7 @@ def Model5(features, adj, mu, gate=None):
         W[D > gate] = 0
     else:
         D2 = sp.coo_matrix((D2, (adj_coo.row, adj_coo.col)))
-        W = (-D2 / d_mean/d_mean/mu).expm1() + adj
+        W = (-D2 / d_mean / d_mean / mu).expm1() + adj
     return W
 
 
@@ -499,6 +506,7 @@ def Model7(W, s, alpha, y_train, train_mask, features):
         correct_label_count(indicator, i)
     return y_train, train_mask
 
+
 def Model8(W, s, alpha, y_train, train_mask):
     W = W.copy().astype(np.float32)
     y_train = y_train.copy()
@@ -522,15 +530,17 @@ def Model8(W, s, alpha, y_train, train_mask):
     return y_train, train_mask
 
 
-def absorption_probability(W, alpha, stored_A = None, column=None):
+def absorption_probability(W, alpha, stored_A=None, column=None):
     try:
-        A = np.load(stored_A+str(alpha)+'.npy')
-        print('load A from '+ stored_A+str(alpha)+'.npy')
+        A = np.load(stored_A + str(alpha) + '.npy')
+        print('load A from ' + stored_A + str(alpha) + '.npy')
         if column is not None:
-            return A[:, column]
+            P = np.zeros(W.shape)
+            P[:, column] = A[:, column]
+            return P
         else:
             return A
-        # raise Exception('DEBUG')
+            # raise Exception('DEBUG')
     except:
         # W=sp.csr_matrix([[0,1],[1,0]])
         # alpha = 1
@@ -543,10 +553,10 @@ def absorption_probability(W, alpha, stored_A = None, column=None):
         # print(np.linalg.det(L))
 
         if column is not None:
-            L=sp.csr_matrix(L)
+            L = sp.csr_matrix(L)
             A = np.zeros(W.shape)
             # start = time.time()
-            A[:, column]=slinalg.spsolve(L, np.eye(L.shape[0])[:, column])
+            A[:, column] = slinalg.spsolve(L, np.eye(L.shape[0])[:, column])
             # print(time.time()-start)
             return A
         else:
@@ -554,20 +564,21 @@ def absorption_probability(W, alpha, stored_A = None, column=None):
             A = np.array(linalg.inv(L, overwrite_a=True))
             # print(time.time()-start)
             if stored_A:
-                np.save(stored_A+str(alpha)+'.npy', A)
+                np.save(stored_A + str(alpha) + '.npy', A)
             return A
-        # fletcher_reeves
+            # fletcher_reeves
 
-        # slinalg.solve(L, np.ones(L.shape[0]))
-        # A_ = np.zeros(W.shape)
-        # I = sp.eye(n)
-        # Di = sp.diags(np.divide(1,np.array(D)+alpha))
-        # for i in range(10):
-        #     # A_=
-        #     A_ = Di*(I+W.dot(A_))
-        # print(time.time()-start)
+            # slinalg.solve(L, np.ones(L.shape[0]))
+            # A_ = np.zeros(W.shape)
+            # I = sp.eye(n)
+            # Di = sp.diags(np.divide(1,np.array(D)+alpha))
+            # for i in range(10):
+            #     # A_=
+            #     A_ = Di*(I+W.dot(A_))
+            # print(time.time()-start)
 
-def gaussian_seidel(A,B):
+
+def gaussian_seidel(A, B):
     X = np.ones(B.shape)
     D = A.diagonal().reshape(A.shape[0], 1)
     R = A.copy()
@@ -576,35 +587,37 @@ def gaussian_seidel(A,B):
         # X = R.dot(X)
         # X = B-X
         # X = X/D
-        X = (B-R.dot(X))/D
+        X = (B - R.dot(X)) / D
     return X
 
-def fletcher_reeves(A,B):
+
+def fletcher_reeves(A, B):
     # A=np.array(A)
-    X=np.zeros(B.shape)
-    r=np.array(B-A.dot(X))
-    rsold = (r*r).sum(0)
-    p=r
+    X = np.zeros(B.shape)
+    r = np.array(B - A.dot(X))
+    rsold = (r * r).sum(0)
+    p = r
     for i in range(10):
         Ap = np.array(A.dot(p))
-        pAp = (p*Ap).sum(0)
-        alpha = rsold/pAp
-        X+=alpha*p
-        r -= alpha*Ap
-        rsnew = (r*r).sum(0)
+        pAp = (p * Ap).sum(0)
+        alpha = rsold / pAp
+        X += alpha * p
+        r -= alpha * Ap
+        rsnew = (r * r).sum(0)
         if True:
             pass
-        p=r+rsnew/rsold*p
+        p = r + rsnew / rsold * p
         rsold = rsnew
     return X
 
-def Model9(W, t, alpha, y_train, train_mask, features, stored_A = None):
+
+def Model9(W, t, alpha, y_train, train_mask, stored_A=None):
     A = absorption_probability(W, alpha, stored_A, train_mask)
     y_train = y_train.copy()
     train_index = np.where(train_mask)[0]
     already_labeled = np.sum(y_train, axis=1)
-    if not isinstance(features, np.ndarray):
-        features = features.toarray()
+    # if not isinstance(features, np.ndarray):
+    #     features = features.toarray()
     print("Additional Label:")
     if not hasattr(t, '__getitem__'):
         t = [t for _ in range(y_train.shape[1])]
@@ -625,11 +638,12 @@ def Model9(W, t, alpha, y_train, train_mask, features, stored_A = None):
         train_index = np.hstack([train_index, index])
         y_train[index, i] = 1
         correct_label_count(index, i)
-    print()
+
     train_mask = sample_mask(train_index, y_train.shape[0])
     return y_train, train_mask
 
-def Model10(W, s, t, alpha, y_train, train_mask, features, stored_A = None):
+
+def Model10(W, s, t, alpha, y_train, train_mask, features, stored_A=None):
     W = W.copy().astype(np.float32)
     y_train = y_train.copy()
     train_index = np.where(train_mask)[0]
@@ -640,17 +654,17 @@ def Model10(W, s, t, alpha, y_train, train_mask, features, stored_A = None):
     H[H > d_hat] = d_hat
     H = np.diag(H.flat)
     try:
-        A = np.load(stored_A+'.npy')
+        A = np.load(stored_A + '.npy')
     except:
         A = np.array(np.linalg.inv(L + alpha * H))
         np.save(stored_A, A)
 
     try:
-        A = np.load(stored_A+str(alpha)+'.npy')
+        A = np.load(stored_A + str(alpha) + '.npy')
     except:
         A = np.array(np.linalg.inv(L + alpha * H))
         if stored_A:
-            np.save(stored_A+str(alpha)+'.npy', A)
+            np.save(stored_A + str(alpha) + '.npy', A)
 
     already_labeled = np.sum(y_train, axis=1)
     if not isinstance(features, np.ndarray):
@@ -669,17 +683,19 @@ def Model10(W, s, t, alpha, y_train, train_mask, features, stored_A = None):
         D = np.sum((x1 - x2) ** 2, axis=2) ** 0.5
         D = np.mean(D, axis=1)
         gate = 100000000 if t >= D.shape[0] else np.sort(D, axis=0)[t]
-        index = index[D<gate]
+        index = index[D < gate]
         train_index = np.hstack([train_index, index])
         y_train[index, i] = 1
         correct_label_count(index, i)
     train_mask = sample_mask(train_index, y_train.shape[0])
     return y_train, train_mask
 
+
 def Model11(y, y_train, train_mask):
-    label_per_sample = np.vstack([np.zeros(y), np.eye(y)])[np.add.accumulate(train_mask)*train_mask]
+    label_per_sample = np.vstack([np.zeros(y), np.eye(y)])[np.add.accumulate(train_mask) * train_mask]
     sample2label = label_per_sample.T.dot(y_train)
     return label_per_sample, sample2label
+
 
 def Model12(adj, k):
     alpha = 1e-2
@@ -689,7 +705,7 @@ def Model12(adj, k):
 
     support = [sp.eye(n)]
     argsort = np.argsort(P, axis=1)
-    for i in range(1,k+1):
+    for i in range(1, k + 1):
         # support[0] += sp.coo_matrix((np.ones(n), (np.arange(n), argsort[:, -i])), shape=(n, n))
         support.append(sp.coo_matrix((np.ones(n), (np.arange(n), argsort[:, -i])), shape=(n, n)))
     return sparse_to_tuple(support)
@@ -717,14 +733,14 @@ def Model16(prediction, t, y_train, train_mask):
     indicator = np.logical_and(np.logical_not(train_mask), indicator)
 
     prediction = np.zeros(prediction.shape)
-    prediction[np.arange(len(new_gcn_index)),new_gcn_index] = 1.0
+    prediction[np.arange(len(new_gcn_index)), new_gcn_index] = 1.0
     prediction[train_mask] = y_train[train_mask]
 
-    correct_labels = np.sum(prediction[indicator]*all_labels[indicator], axis=0)
+    correct_labels = np.sum(prediction[indicator] * all_labels[indicator], axis=0)
     count = np.sum(prediction[indicator], axis=0)
     print('Additiona Label:')
-    for i,j in zip(correct_labels, count):
-        print(int(i),'/',int(j),sep='',end='\t')
+    for i, j in zip(correct_labels, count):
+        print(int(i), '/', int(j), sep='', end='\t')
     print()
 
     y_train = np.copy(y_train)
@@ -734,7 +750,7 @@ def Model16(prediction, t, y_train, train_mask):
     return y_train, train_mask
 
 
-def Model17(adj, alpha, y_train, train_mask, y_test, stored_A = None):
+def Model17(adj, alpha, y_train, train_mask, y_test, stored_A=None):
     P = absorption_probability(adj, alpha, stored_A=stored_A, column=train_mask)
     # # weighted classifier
     # prediction = np.zeros(y_train.shape)
@@ -742,7 +758,7 @@ def Model17(adj, alpha, y_train, train_mask, y_test, stored_A = None):
     # test_acc = np.sum(prediction*y_test)/np.sum(y_test)
     # test_acc_of_class = np.sum(prediction*y_test, axis=0)/np.sum(y_test, axis=0)
     # print(test_acc, test_acc_of_class)
-    P = P[:,train_mask]
+    P = P[:, train_mask]
 
     # nearest clssifier
     predicted_labels = np.argmax(P, axis=1)
@@ -750,12 +766,12 @@ def Model17(adj, alpha, y_train, train_mask, y_test, stored_A = None):
     prediction[np.arange(P.shape[0]), predicted_labels] = 1
 
     y = np.sum(train_mask)
-    label_per_sample = np.vstack([np.zeros(y), np.eye(y)])[np.add.accumulate(train_mask)*train_mask]
+    label_per_sample = np.vstack([np.zeros(y), np.eye(y)])[np.add.accumulate(train_mask) * train_mask]
     sample2label = label_per_sample.T.dot(y_train)
     prediction = prediction.dot(sample2label)
 
-    test_acc = np.sum(prediction*y_test)/np.sum(y_test)
-    test_acc_of_class = np.sum(prediction*y_test, axis=0)/np.sum(y_test, axis=0)
+    test_acc = np.sum(prediction * y_test) / np.sum(y_test)
+    test_acc_of_class = np.sum(prediction * y_test, axis=0) / np.sum(y_test, axis=0)
     # print(test_acc, test_acc_of_class)
     return test_acc, test_acc_of_class, prediction
 
@@ -787,7 +803,7 @@ def Model19(prediction, t, y_train, train_mask, W, alpha, stored_A, union_or_int
     index_lp = []
     for i in range(no_class):
         y = y_train[:, i:i + 1]
-        a = np.sum(A[:, y.flat>0], axis=1)
+        a = np.sum(A[:, y.flat > 0], axis=1)
         a[already_labeled > 0] = 0
         # a[W.dot(y) > 0] = 0
         gate = (-np.sort(-a, axis=0))[t[i]]
@@ -805,11 +821,12 @@ def Model19(prediction, t, y_train, train_mask, W, alpha, stored_A, union_or_int
             index = list(set(index_gcn[i]) | set(index_lp[i]))
         else:
             index = list(set(index_gcn[i]) & set(index_lp[i]))
-        y_train[index,i] = 1
+        y_train[index, i] = 1
         train_mask[index] = True
-        print(np.sum(all_labels[index,i]),'/',len(index),sep='',end='\t')
+        print(np.sum(all_labels[index, i]), '/', len(index), sep='', end='\t')
     print()
     return y_train, train_mask
+
 
 def Model20(prediction, t, y_train, train_mask, W, alpha, stored_A):
     no_class = y_train.shape[1]  # number of class
@@ -861,22 +878,102 @@ def Model20(prediction, t, y_train, train_mask, W, alpha, stored_A):
         # else:
         #     index = list(set(index_gcn[i]) & set(index_lp[i]))
         index = index_lp[i]
-        y_train[index,i] = 1
+        y_train[index, i] = 1
         train_mask[index] = True
-        print(np.sum(all_labels[index,i]),'/',len(index),sep='',end='\t')
+        print(np.sum(all_labels[index, i]), '/', len(index), sep='', end='\t')
     print()
     return y_train, train_mask
 
+
+def smooth(features, adj, smoothing, alpha=None, beta=None, stored_A=None, poly_parameters=None):
+    if smoothing is None:
+        return features
+    if smoothing == 'poly':
+        adj = normalize_adj(adj + sp.eye(adj.shape[0]), type='rw')
+        n = adj.shape[0]
+        # adj = adj.copy().astype(np.float32)
+        D = adj.sum(1).flat
+        L = sp.diags(D) - adj
+        new_feature = sp.csr_matrix(np.zeros(features.shape))
+        for a in poly_parameters[::-1]:
+            new_feature = L.dot(new_feature) + a * features
+        return new_feature
+    elif smoothing == 'ap':
+        return Model22(adj, features, alpha, stored_A)
+    elif smoothing == 'taubin':
+        pass
+    elif smoothing == 'ap_appro':
+        adj = normalize_adj(adj + sp.eye(adj.shape[0]), type='rw')
+        # n = adj.shape[0]
+        # adj = adj.copy().astype(np.float32)
+        # D = adj.sum(1).flat
+        # L = sp.diags(D) - adj
+        new_feature = sp.csr_matrix(np.zeros(features.shape))
+        for i in range(3):
+            new_feature = adj.dot(new_feature) / (alpha + 1) + features
+        return new_feature
+    elif smoothing == 'test21':
+        return Test21(adj, features, alpha, beta, stored_A)
+    else:
+        raise ValueError("smoothing must be one of 'poly' | 'ap' | 'taubin'")
+
+
 def Model22(adj, features, alpha, stored_A=None):
-    P = absorption_probability(adj, alpha, stored_A=stored_A)
-    return sp.csr_matrix(P*alpha*features)
+    P = absorption_probability(adj + sp.eye(adj.shape[0]), alpha, stored_A=stored_A)
+    return sp.csr_matrix(P * alpha * features)
+
+
+def Test21(adj, features, alpha, beta, stored_A=None):
+    P = absorption_probability(adj + sp.eye(adj.shape[0]), alpha, stored_A=stored_A)
+    P = (P > (beta / alpha)).astype(np.int)
+    return sp.csr_matrix(P * alpha * features)
+
+
+def Model26(W, t, alpha, y_train, train_mask, stored_A=None):
+    A = absorption_probability(W, alpha, stored_A, train_mask)
+    W = W.copy()
+    y_train = y_train.copy()
+    train_index = np.where(train_mask)[0]
+    already_labeled = np.sum(y_train, axis=1)
+    # if not isinstance(features, np.ndarray):
+    #     features = features.toarray()
+    print("Additional Label:")
+    if not hasattr(t, '__getitem__'):
+        t = [t for _ in range(y_train.shape[1])]
+    for i in range(y_train.shape[1]):
+        y = y_train[:, i:i + 1]
+        a = A.dot(y)
+        a[already_labeled > 0] = 0
+        # a[W.dot(y) > 0] = 0
+        gate = (-np.sort(-a, axis=0))[t[i]]
+        index = np.where(a.flat > gate)[0]
+        neighbors = np.argmax(A, 1)[index]
+
+        # x1 = features[index, :].reshape((-1, 1, features.shape[1]))
+        # x2 = features[y_train[:, i].astype(np.bool)].reshape((1, -1, features.shape[1]))
+        # D = np.sum((x1 - x2) ** 2, axis=2) ** 0.5
+        # D = np.mean(D, axis=1)
+        # gate = 100000000 if t[i] >= D.shape[0] else np.sort(D, axis=0)[t[i]]
+        # index = index[D<gate]
+        # data = np.ones(len(np.where(y)[0])*len(index))
+        # # rows = index.repeat(len(np.where(y)[0]))
+        # # cols = np.hstack(np.where(y)[0] for i in range(len(index)))
+        data = np.ones(len(index))
+        rows = index
+        cols = neighbors
+        W += sp.coo_matrix((data, (rows, cols)), shape=W.shape)
+        W += sp.coo_matrix((data, (cols, rows)), shape=W.shape)
+        # train_index = np.hstack([train_index, index])
+        correct_label_count(index, i)
+    return sp.csr_matrix(W)
+
 
 def taubin_smoothor(adj, lam, mu, repeat):
     n = adj.shape[0]
     adj = normalize(adj + sp.eye(adj.shape[0]), norm='l1', axis=1)
-    smoothor = sp.eye(n) * (1-lam) + lam * adj
-    inflator = sp.eye(n) * (1-mu) + mu * adj
-    step_transformor = smoothor*inflator
+    smoothor = sp.eye(n) * (1 - lam) + lam * adj
+    inflator = sp.eye(n) * (1 - mu) + mu * adj
+    step_transformor = smoothor * inflator
 
     # # eigenvalue truncation
     # vals, vecs = slinalg.eig(adj.toarray())
@@ -898,22 +995,25 @@ def taubin_smoothor(adj, lam, mu, repeat):
     #
     # return sp.csr_matrix(np.linalg.matrix_power(step_transformor.toarray(), n=repeat))
 
-    step_transformor = smoothor*inflator
+    step_transformor = smoothor * inflator
     transformor = sp.eye(n)
     # for i in range(repeat):
     #     transformor *= step_transformor
 
     transformor = sp.eye(n)
     base = step_transformor
-    while repeat!=0 :
-        if repeat%2 :
+    while repeat != 0:
+        if repeat % 2:
             transformor *= base
         base *= base
         repeat //= 2
         print(repeat)
     return transformor
 
+
 all_labels = None
+
+
 # dataset = None
 
 def correct_label_count(indicator, i):
@@ -925,7 +1025,7 @@ def correct_label_count(indicator, i):
     else:
         raise TypeError('indicator must be of data type np.bool or np.int')
     # print("     for class {}, {}/{} is correct".format(i, count, total))
-    print(count,'/',total,sep='',end='\t')
+    print(count, '/', total, sep='', end='\t')
 
 
 def construct_feed_dict(features, support, labels, labels_mask, placeholders):
@@ -945,7 +1045,8 @@ def preprocess_model_config(model_config):
     for c in model_config['connection']:
         if c not in ['c', 'd', 'r', 'f', 'C']:
             raise ValueError(
-                'connection string specified by --connection can only contain "c", "d", "r", "f", "C" but "{}" found'.format(c))
+                'connection string specified by --connection can only contain "c", "d", "r", "f", "C" but "{}" found'.format(
+                    c))
     for i in model_config['layer_size']:
         if not isinstance(i, int):
             raise ValueError('layer_size should be a list of int, but found {}'.format(model_config['layer_size']))
@@ -956,15 +1057,39 @@ def preprocess_model_config(model_config):
 
     # Generate name
     if not model_config['name']:
-        model_name = model_config['connection'][0]
-        for char, size in \
-                zip(model_config['connection'][1:], model_config['layer_size']):
-            model_name += str(size) + char
+        if model_config['Model'] == 23:
+            if model_config['classifier'] == 'svm':
+                model_name = 'svm_' + model_config['svm_kernel']
+                if model_config['svm_kernel'] == 'rbf':
+                    model_name += '_' + str(model_config['gamma'])
+                if model_config['svm_kernel'] == 'poly':
+                    model_name += '_' + str(model_config['svm_degree'])
+            elif model_config['classifier'] == 'tree':
+                model_name = 'tree'
+                if model_config['tree_depth']:
+                    model_name += '_' + str(model_config['tree_depth'])
+            else:
+                raise ValueError('classifier:' + model_config['classifier'])
+        else:
+            model_name = model_config['connection'][0]
+            for char, size in \
+                    zip(model_config['connection'][1:], model_config['layer_size']):
+                model_name += str(size) + char
+
+        if model_config['smoothing'] == 'ap':
+            model_name += '_' + 'ap_smoothing' + str(model_config['alpha'])
+        elif model_config['smoothing'] == 'test21':
+            model_name += '_' + 'test21' + '_' + str(model_config['alpha']) + '_' + str(model_config['beta'])
+        elif model_config['smoothing'] == 'poly':
+            model_name += '_' + 'poly_smoothing'
+            for a in model_config['poly_parameters']:
+                model_name += '_' + str(a)
+
         if model_config['conv'] == 'cheby':
             model_name += '_cheby' + str(model_config['max_degree'])
         if model_config['conv'] == 'taubin':
-            model_name += '_taubin' + str(model_config['taubin_lambda'])\
-                          + '_' + str(model_config['taubin_mu'])\
+            model_name += '_taubin' + str(model_config['taubin_lambda']) \
+                          + '_' + str(model_config['taubin_mu']) \
                           + '_' + str(model_config['taubin_repeat'])
         if model_config['validate']:
             model_name += '_validate'
@@ -979,9 +1104,10 @@ def preprocess_model_config(model_config):
             model_name += '_mu' + str(model_config['mu'])
         if model_config['Model'] in [6]:
             pass
-        if model_config['Model'] in [9,10]:
+        if model_config['Model'] in [9, 10]:
             model_name += '_alpha_' + str(
-                model_config['alpha']) + '_t' + str(model_config['t']).replace('[', '_').replace(']','_').replace(', ','_')
+                model_config['alpha']) + '_t' + str(model_config['t']).replace('[', '_').replace(']', '_').replace(', ',
+                                                                                                                   '_')
         if model_config['Model'] in [11]:
             model_name += '_' + model_config["Model11"]
         if model_config['Model'] in [12]:
@@ -989,12 +1115,14 @@ def preprocess_model_config(model_config):
         if model_config['Model'] in [13]:
             model_name += '_' + model_config["Model11"]
             model_name += '_s' + str(model_config['s']) + '_alpha_' + str(
-                model_config['alpha']) + '_t' + str(model_config['t']).replace('[', '_').replace(']','_').replace(', ','_')
+                model_config['alpha']) + '_t' + str(model_config['t']).replace('[', '_').replace(']', '_').replace(', ',
+                                                                                                                   '_')
         if model_config['Model'] in [14]:
             pass
         if model_config['Model'] in [15]:
             model_name += '_s' + str(model_config['s']) + '_alpha_' + str(
-                model_config['alpha']) + '_t' + str(model_config['t']).replace('[', '_').replace(']','_').replace(', ','_')
+                model_config['alpha']) + '_t' + str(model_config['t']).replace('[', '_').replace(']', '_').replace(', ',
+                                                                                                                   '_')
         if model_config['Model'] in [16]:
             Model_to_add_label = copy.deepcopy(model_config)
             if 'Model_to_add_label' in Model_to_add_label:
@@ -1020,7 +1148,8 @@ def preprocess_model_config(model_config):
             model_name += '_alpha_' + str(model_config['alpha'])
         if model_config['Model'] in [18]:
             model_name += '_s' + str(model_config['s']) + '_alpha_' + str(
-                model_config['alpha']) + '_t' + str(model_config['t']).replace('[', '_').replace(']','_').replace(', ','_')
+                model_config['alpha']) + '_t' + str(model_config['t']).replace('[', '_').replace(']', '_').replace(', ',
+                                                                                                                   '_')
         if model_config['Model'] in [19]:
             Model_to_add_label = copy.deepcopy(model_config)
             if 'Model_to_add_label' in Model_to_add_label:
@@ -1043,14 +1172,19 @@ def preprocess_model_config(model_config):
                          + '__' + model_config['Model_to_add_label']['name'] + '__' \
                          + '__' + model_config['Model_to_predict']['name'] + '__'
         if model_config['Model'] == 20:
-            model_name += str(model_config['alpha']) + '_t' + str(model_config['t']).replace('[', '_').replace(']','_').replace(', ','_')
+            model_name += str(model_config['alpha']) + '_t' + str(model_config['t']).replace('[', '_').replace(']',
+                                                                                                               '_').replace(
+                ', ', '_')
             model_config['epochs'] *= 2
         if model_config['Model'] == 21:
-            model_name += str(model_config['alpha']) + '_t' + str(model_config['t']).replace('[', '_').replace(']','_').replace(', ','_') \
+            model_name += str(model_config['alpha']) + '_t' + str(model_config['t']).replace('[', '_').replace(']',
+                                                                                                               '_').replace(
+                ', ', '_') \
                           + '_t2' + str(model_config['t2']).replace('[', '_').replace(']', '_').replace(', ', '_')
             model_config['epochs'] *= 2
         if model_config['Model'] == 22:
             model_name += '_alpha_' + str(model_config['alpha'])
+            raise ValueError('Please use model 0 with smoothing.')
         model_config['name'] = model_name
 
     # Generate logdir
@@ -1069,9 +1203,10 @@ def preprocess_model_config(model_config):
         # if not model_config.get('ckpt_path', None):
         #     model_config['ckpt_path'] = path.join(model_config['logdir'], 'checkpoint')
 
+
 if __name__ == '__main__':
     A = sp.csr_matrix(np.array([
-        [2.,-1.],
+        [2., -1.],
         [1., 2.]
     ]))
     B = sp.csr_matrix(np.array([
@@ -1094,11 +1229,12 @@ if __name__ == '__main__':
     X = gaussian_seidel(L, sp.eye(L.shape[0], dtype=L.dtype).tocsr()[:, train_mask])
     pass
 
-def pow3( a, b):
+
+def pow3(a, b):
     ans = 1
     base = a
-    while(b!=0):
-        if(b%2):
+    while (b != 0):
+        if (b % 2):
             ans *= base
         base *= base
         b //= 2
