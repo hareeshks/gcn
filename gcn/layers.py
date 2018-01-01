@@ -164,11 +164,11 @@ class GraphConvolution(Layer):
                 self.vars['weight'] = glorot([input_dim, output_dim], name='weight')
                 for i in range(len(self.support)):
                     self.vars['theta_' + str(i)] = tf.constant([1,-1,0][i], name='theta_' + str(i), dtype=tf.float32)
-                    # glorot((1,1), name='theta_' + str(i))
+                    # self.vars['theta_' + str(i)] = glorot((1,1), name='theta_' + str(i))
             else:
                 for i in range(len(self.support)):
-                    self.vars['weights_' + str(i)] = tf.Variable(np.ones([input_dim, output_dim], dtype=np.float32)*[1,-1,0][i], name='weights_' + str(i))
-                    # self.vars['weights_' + str(i)] = glorot([input_dim, output_dim], name='weights_' + str(i))
+                    # self.vars['weights_' + str(i)] = tf.Variable(np.ones([input_dim, output_dim], dtype=np.float32)*[1,-1,0][i], name='weights_' + str(i))
+                    self.vars['weights_' + str(i)] = glorot([input_dim, output_dim], name='weights_' + str(i))
             if self.bias:
                 self.vars['bias'] = zeros([output_dim], name='bias')
 
