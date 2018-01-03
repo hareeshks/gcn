@@ -556,7 +556,7 @@ def absorption_probability(W, alpha, stored_A=None, column=None):
             L = sp.csr_matrix(L)
             A = np.zeros(W.shape)
             # start = time.time()
-            A[:, column] = slinalg.spsolve(L, np.eye(L.shape[0])[:, column])
+            A[:, column] = slinalg.spsolve(L, np.eye(L.shape[0], dtype='float32')[:, column])
             # print(time.time()-start)
             return A
         else:
@@ -824,7 +824,6 @@ def Model19(prediction, t, y_train, train_mask, W, alpha, stored_A, union_or_int
         y_train[index, i] = 1
         train_mask[index] = True
         print(np.sum(all_labels[index, i]), '/', len(index), sep='', end='\t')
-    print()
     return y_train, train_mask
 
 
@@ -1093,7 +1092,9 @@ def preprocess_model_config(model_config):
                           + '_' + str(model_config['taubin_repeat'])
         if model_config['validate']:
             model_name += '_validate'
+        
         model_name += '_Model' + str(model_config['Model'])
+        
         if model_config['Model'] in [1]:
             model_name += '_' + model_config['absorption_type'] + '_alpha_' + str(
                 model_config['alpha'])
@@ -1185,6 +1186,9 @@ def preprocess_model_config(model_config):
         if model_config['Model'] == 22:
             model_name += '_alpha_' + str(model_config['alpha'])
             raise ValueError('Please use model 0 with smoothing.')
+        
+        if model_config['loss_func'] == 'imbalance':
+            model_name+='_imbalance_beta'+str(model_config['ws_beta'])
         model_config['name'] = model_name
 
     # Generate logdir
