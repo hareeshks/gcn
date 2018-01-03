@@ -107,8 +107,8 @@ configuration ={
         'threads'           : 2*cpu_count(),  #'Number of threads'
         'train'             : True,
         'drop_inter_class_edge': False,
-        'loss_func'         :'default',
-        'ws_beta'           :20
+        'loss_func'         :'default',     #'imbalance'
+        'ws_beta'           : 20
     },
 
     # The list of model to be train.
@@ -119,25 +119,16 @@ configuration ={
             'Model' : 0,
             'connection'        : 'cc',
             'conv'              : 'gcn',
-        }
+            'loss_func'         : 'imbalance',
+            'ws_beta'           : ws_b
+        } for ws_b in range(3, 16, 3)
     ] +
     [
         {
-            'Model' : 26,
+            'Model' : 0,
             'connection'        : 'cc',
             'conv'              : 'gcn',
-            'alpha'             : alpha
-        } for alpha in [1e-6, 1e-3, 1e-1]
-    ] +
-    [
-        {
-            'Model': 0,
-            'connection': 'cc',
-            'conv': 'gcn',
-            'smoothing' : 'test21',
-            'alpha': alpha,
-            'beta' : beta
-        } for alpha in [0.1, 0.2, 0.3, 0.4, 0.5] for beta in [0.001, 0.005, 0.01]
+        }
     ]
 }
 
