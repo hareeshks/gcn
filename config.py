@@ -107,6 +107,8 @@ configuration ={
         'threads'           : 2*cpu_count(),  #'Number of threads'
         'train'             : True,
         'drop_inter_class_edge': False,
+        'loss_func'         :'default',
+        'ws_beta'           :20
     },
 
     # The list of model to be train.
@@ -148,6 +150,8 @@ parser.add_argument("--dataset", type=str)
 parser.add_argument("--train_size", type=float)
 parser.add_argument("--repeating", type=int)
 parser.add_argument("--validate", type=bool, help='0 | 1')
+parser.add_argument("--loss_func", type=str)
+parser.add_argument("--ws_beta", type=int)
 
 args = parser.parse_args()
 print(args)
@@ -159,6 +163,10 @@ if args.repeating is not None:
     configuration['repeating']=args.repeating
 if args.validate is not None:
     configuration['default']['validate']=args.validate
+if args.loss_func is not None:
+    configuration['default']['loss_func']=args.loss_func
+if args.ws_beta is not None:
+    configuration['default']['ws_beta']=args.ws_beta
 pprint.PrettyPrinter(indent=4).pprint(configuration)
 # exit()
 
