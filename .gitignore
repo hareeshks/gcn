@@ -99,3 +99,5 @@ ENV/
 .ropeproject
 
 *.pickle
+.vscode/settings.json
+.vscode/launch.json

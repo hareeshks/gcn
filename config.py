@@ -107,8 +107,9 @@ configuration ={
         'threads'           : 2*cpu_count(),  #'Number of threads'
         'train'             : True,
         'drop_inter_class_edge': False,
-        'loss_func'         :'default',     #'imbalance'
-        'ws_beta'           : 20
+        'loss_func'         :'default',     #'imbalance', 'triplet'
+        'ws_beta'           : 20,
+		'max_triplet':1000  #for triplet, 1000 for cora to get all tripets
     },
 
     # The list of model to be train.
@@ -119,9 +120,10 @@ configuration ={
             'Model' : 0,
             'connection'        : 'cc',
             'conv'              : 'gcn',
-            'loss_func'         : 'imbalance',
-            'ws_beta'           : ws_b
-        } for ws_b in range(3, 16, 3)
+            'loss_func'         : 'triplet',
+            'MARGIN' : margin,
+            'triplet_lamda':1.0
+        } for margin in [0.1,0.2, 0.3, 0.4, 0.5]
     ] +
     [
         {
