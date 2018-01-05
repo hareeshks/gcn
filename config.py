@@ -107,6 +107,9 @@ configuration ={
         'threads'           : 2*cpu_count(),  #'Number of threads'
         'train'             : True,
         'drop_inter_class_edge': False,
+        'loss_func'         :'default',     #'imbalance', 'triplet'
+        'ws_beta'           : 20,
+		'max_triplet':1000  #for triplet, 1000 for cora to get all tripets
     },
 
     # The list of model to be train.
@@ -117,25 +120,17 @@ configuration ={
             'Model' : 0,
             'connection'        : 'cc',
             'conv'              : 'gcn',
-        }
+            'loss_func'         : 'triplet',
+            'MARGIN' : margin,
+            'triplet_lamda':1.0
+        } for margin in [0.1,0.2, 0.3, 0.4, 0.5]
     ] +
     [
         {
-            'Model' : 26,
+            'Model' : 0,
             'connection'        : 'cc',
             'conv'              : 'gcn',
-            'alpha'             : alpha
-        } for alpha in [1e-6, 1e-3, 1e-1]
-    ] +
-    [
-        {
-            'Model': 0,
-            'connection': 'cc',
-            'conv': 'gcn',
-            'smoothing' : 'test21',
-            'alpha': alpha,
-            'beta' : beta
-        } for alpha in [0.1, 0.2, 0.3, 0.4, 0.5] for beta in [0.001, 0.005, 0.01]
+        }
     ]
 }
 
@@ -148,6 +143,8 @@ parser.add_argument("--dataset", type=str)
 parser.add_argument("--train_size", type=float)
 parser.add_argument("--repeating", type=int)
 parser.add_argument("--validate", type=bool, help='0 | 1')
+parser.add_argument("--loss_func", type=str)
+parser.add_argument("--ws_beta", type=int)
 
 args = parser.parse_args()
 print(args)
@@ -159,6 +156,10 @@ if args.repeating is not None:
     configuration['repeating']=args.repeating
 if args.validate is not None:
     configuration['default']['validate']=args.validate
+if args.loss_func is not None:
+    configuration['default']['loss_func']=args.loss_func
+if args.ws_beta is not None:
+    configuration['default']['ws_beta']=args.ws_beta
 pprint.PrettyPrinter(indent=4).pprint(configuration)
 # exit()
 

@@ -1,8 +1,9 @@
 from gcn.layers import DenseNet, GraphConvolution, Residual, FullyConnected, ConvolutionDenseNet
-from gcn.metrics import masked_accuracy, masked_softmax_cross_entropy
+from gcn.metrics import masked_accuracy, masked_softmax_cross_entropy, weighted_softmax_cross_entropy, triplet_softmax_cross_entropy
 import tensorflow as tf
+import numpy as np
 from copy import copy
-
+import random
 
 class GCN_MLP(object):
     def __init__(self, model_config, placeholders, input_dim):
@@ -114,13 +115,21 @@ class GCN_MLP(object):
             self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['label_per_sample'],
                                                       self.placeholders['labels_mask'])
         elif self.model_config['Model'] in [14, 15]:
-                sample2label = self.placeholders['sample2label']
-                unsoftmaxed = tf.matmul(self.outputs, sample2label) / tf.reduce_sum(sample2label, axis=0,
-                                                                                    keep_dims=True)
-                self.loss += masked_softmax_cross_entropy(unsoftmaxed, self.placeholders['labels'],
-                                                          self.placeholders['labels_mask'])
+            sample2label = self.placeholders['sample2label']
+            unsoftmaxed = tf.matmul(self.outputs, sample2label) / tf.reduce_sum(sample2label, axis=0,
+                                                                                keep_dims=True)
+            self.loss += masked_softmax_cross_entropy(unsoftmaxed, self.placeholders['labels'],
+                                                        self.placeholders['labels_mask'])
         else:
-            self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
+            if self.model_config['loss_func'] == 'imbalance':
+                self.loss += weighted_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
+                                                            self.model_config['ws_beta'])
+			elif self.model_config['loss_func'] == 'triplet':
+                    self.loss += triplet_softmax_cross_entropy(self.outputs, self.placeholders['labels'], self.placeholders['triplet'],
+                                                             self.placeholders['labels_mask'], self.model_config['MARGIN'], self.model_config['triplet_lamda'])
+												 
+            else:
+                self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
                                                       self.placeholders['labels_mask'])
         # Laplacian regularization
         if self.model_config['lambda'] != 0:
