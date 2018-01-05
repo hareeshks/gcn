@@ -7,7 +7,7 @@ def compute_euclidean_distance(x, y):
     """
 
     d = tf.square(x-y)
-    d = tf.sqrt(tf.reduce_sum(d, axis=1)) # What about the axis ???
+    d = tf.sqrt(tf.reduce_sum(d, axis=1)+1e-8) # What about the axis ???
     return d
 
 
