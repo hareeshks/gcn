@@ -14,6 +14,7 @@ import sys
 from os import path
 import copy
 import os
+os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
 import time
 import random
 
@@ -54,12 +55,12 @@ def get_triplet(y_train, train_mask, max_triplets):
                                                  [np.newaxis, :]),axis=0)).tolist()
         
     index_nonzero = sorted(index_nonzero, key = lambda s: s[1])
-    print(index_nonzero)
-    print(label_count)
+    #print(index_nonzero)
+    #print(label_count)
  
     def get_one_triplet(input_index, index_nonzero, label_count, all_count, max_triplets):
         triplet = []
-        if label_count[input_index[1]]==0 or label_count[input_index[1]]==1:
+        if label_count[input_index[1]]==0:
             return 0
         else:
  #           print('max_triplets', max_triplets)
@@ -67,12 +68,13 @@ def get_triplet(y_train, train_mask, max_triplets):
    #         print(label_count[input_index[1]])
             n_triplets = min(max_triplets, int(all_count-label_count[input_index[1]]))
    #         print('----------')
+
             for j in range(int(label_count[input_index[1]])-1):
                 positives = []
-                negatives = []
-                            
+                negatives = []           
                 for k, (value, label) in enumerate(index_nonzero):
-                    if label == input_index[1] and value != input_index[0]:
+                    #find a postive sample, and if only one sample then choose itself
+                    if label == input_index[1] and (value != input_index[0] or label_count[input_index[1]]==1):
                         positives.append(index_nonzero[k])
                     if label != input_index[1]:
                         negatives.append(index_nonzero[k])
