@@ -1,9 +1,9 @@
 from gcn.layers import DenseNet, GraphConvolution, Residual, FullyConnected, ConvolutionDenseNet
-from gcn.metrics import masked_accuracy, masked_softmax_cross_entropy, weighted_softmax_cross_entropy
+from gcn.metrics import masked_accuracy, masked_softmax_cross_entropy, weighted_softmax_cross_entropy, triplet_softmax_cross_entropy
 import tensorflow as tf
 import numpy as np
 from copy import copy
-
+import random
 
 class GCN_MLP(object):
     def __init__(self, model_config, placeholders, input_dim):
@@ -124,6 +124,10 @@ class GCN_MLP(object):
             if self.model_config['loss_func'] == 'imbalance':
                 self.loss += weighted_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
                                                             self.model_config['ws_beta'])
+			elif self.model_config['loss_func'] == 'triplet':
+                    self.loss += triplet_softmax_cross_entropy(self.outputs, self.placeholders['labels'], self.placeholders['triplet'],
+                                                             self.placeholders['labels_mask'], self.model_config['MARGIN'], self.model_config['triplet_lamda'])
+												 
             else:
                 self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
                                                       self.placeholders['labels_mask'])

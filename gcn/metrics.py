@@ -1,6 +1,58 @@
 import tensorflow as tf
 import numpy as np
 
+def compute_euclidean_distance(x, y):
+    """
+    Computes the euclidean distance between two tensorflow variables
+    """
+
+    d = tf.square(x-y)
+    d = tf.sqrt(tf.reduce_sum(d, axis=1)) # What about the axis ???
+    return d
+
+
+def compute_triplet_loss(anchor_feature, positive_feature, negative_feature, margin):
+
+    """
+    Compute the contrastive loss as in
+    L = || f_a - f_p ||^2 - || f_a - f_n ||^2 + m
+    **Parameters**
+     anchor_feature:
+     positive_feature:
+     negative_feature:
+     margin: Triplet margin
+    **Returns**
+     Return the loss operation
+    """
+
+    with tf.name_scope("triplet_loss"):
+        d_p_squared = tf.square(compute_euclidean_distance(anchor_feature, positive_feature))
+        d_n_squared = tf.square(compute_euclidean_distance(anchor_feature, negative_feature))
+
+        loss = tf.maximum(0., d_p_squared - d_n_squared + margin)
+
+        return tf.reduce_mean(loss), tf.reduce_mean(d_p_squared), tf.reduce_mean(d_n_squared)
+    
+
+
+def triplet_softmax_cross_entropy(preds, labels, triplet, mask, MARGIN, triplet_lamda):
+    """Softmax cross-entropy loss with masking."""
+    #origin
+    loss = tf.nn.softmax_cross_entropy_with_logits(logits=preds, labels=labels)
+
+    anchor, positive, negative = tf.unstack(triplet, 3, axis = 1)
+    train_anchor = tf.gather(preds, anchor)
+    train_positive = tf.gather(preds, positive)
+    train_negative = tf.gather(preds, negative)
+    loss_triple, positives, negatives = compute_triplet_loss(train_anchor, train_positive, train_negative, MARGIN)
+    mask = tf.cast(mask, dtype=tf.float32)
+    mask /= tf.reduce_mean(mask)
+    loss = loss + triplet_lamda*loss_triple
+    loss *= mask
+    
+    return tf.reduce_mean(loss)
+
+
 def weighted_softmax_cross_entropy(preds, labels, beta):
     print('A')
     # S = mask.reduce_sum(axis=0)

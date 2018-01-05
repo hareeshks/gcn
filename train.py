@@ -41,12 +41,13 @@ def train(model_config, sess, seed, data_split = None):
         train_mask  = data_split['train_mask']
         val_mask    = data_split['val_mask']
         test_mask   = data_split['test_mask']
+		triplet     = data_split['triplet']
     else:
         # Load data
-        adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = \
+        adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask, size_of_each_class, triplet = \
             load_data(model_config['dataset'],
                       train_size=model_config['train_size'],
-                      validation_size=model_config['validation_size'])
+                      validation_size=model_config['validation_size'], model_config=model_config)
         # preprocess_features
         features = preprocess_features(features, feature_type=model_config['feature'])
         features = smooth(features, adj, model_config['smoothing'],
@@ -62,7 +63,8 @@ def train(model_config, sess, seed, data_split = None):
             'y_test' : y_test,
             'train_mask' : train_mask,
             'val_mask' : val_mask,
-            'test_mask' : test_mask
+            'test_mask' : test_mask,
+			'triplet' : triplet
         }
     laplacian = sparse.diags(adj.sum(1).flat, 0) - adj
     laplacian = laplacian.astype(np.float32).tocoo()
@@ -253,12 +255,14 @@ def train(model_config, sess, seed, data_split = None):
         'num_features_nonzero': tf.placeholder(tf.int32, name='num_features_nonzero'),
         # helper variable for sparse dropout
         'laplacian' : tf.SparseTensor(indices=np.vstack([laplacian.row, laplacian.col]).transpose()
-                                      , values=laplacian.data, dense_shape=laplacian.shape)
+                                      , values=laplacian.data, dense_shape=laplacian.shape),
+		'triplet': tf.placeholder(tf.int32, name='triplet', shape=(None, None))
     }
     if model_config['Model'] in [11, 13, 14, 15]:
         placeholders['label_per_sample'] = tf.placeholder(tf.float32, name='label_per_sample', shape=(None, label_per_sample.shape[1]))
         placeholders['sample2label'] = tf.placeholder(tf.float32, name='sample2label', shape=(label_per_sample.shape[1], y_train.shape[1]))
 
+	weight=size_of_each_class
     # Create model
     model = GCN_MLP(model_config, placeholders, input_dim=features[2][1])
 
@@ -296,10 +300,10 @@ def train(model_config, sess, seed, data_split = None):
     # projector.visualize_embeddings(train_writer, projector_config)
 
     # Construct feed dictionary
-    train_feed_dict = construct_feed_dict(features, support, y_train, train_mask, placeholders)
+    train_feed_dict = construct_feed_dict(features, support, y_train, train_mask, triplet, placeholders)
     train_feed_dict.update({placeholders['dropout']: model_config['dropout']})
-    valid_feed_dict = construct_feed_dict(features, support, y_val, val_mask, placeholders)
-    test_feed_dict = construct_feed_dict(features, support, y_test, test_mask, placeholders)
+    valid_feed_dict = construct_feed_dict(features, support, y_val, val_mask, triplet, placeholders)
+    test_feed_dict = construct_feed_dict(features, support, y_test, test_mask, triplet, placeholders)
     if model_config['Model'] in [11, 13, 14, 15]:
         train_feed_dict.update({placeholders['label_per_sample']: label_per_sample})
         train_feed_dict.update({placeholders['sample2label']: sample2label})
@@ -421,7 +425,7 @@ def train(model_config, sess, seed, data_split = None):
                 save_path=path.join(model_config['logdir'], 'model.ckpt'),
                 global_step=global_step)))
     print("Total time={}s".format(time.time()-very_begining))
-    return test_acc, test_acc_of_class, prediction
+    return test_acc, test_acc_of_class, prediction, size_of_each_class
 
 
 if __name__ == '__main__':
@@ -443,7 +447,7 @@ if __name__ == '__main__':
                 tf.set_random_seed(seed)
                 with tf.Session(config=tf.ConfigProto(
                         intra_op_parallelism_threads=model_config['threads'])) as sess:
-                    test_acc, test_acc_of_class, prediction = train(model_config, sess, seed)
+                    test_acc, test_acc_of_class, prediction, size_of_each_class = train(model_config, sess, seed)
                     acc[i].append(test_acc)
                     acc_of_class[i].append(test_acc_of_class)
                     # acc_without_valid[i].append(test_acc_without_valid)
@@ -465,6 +469,7 @@ if __name__ == '__main__':
                                                                           model_config['name']))
 
     for model_config, acc_of_class_mean in zip(configuration['model_list'], acc_of_class_means):
+		print(str(size_of_each_class)+' ', end='')
         print('[',end='')
         for acc_of_class in acc_of_class_mean:
             print('{:0<5.3}'.format(acc_of_class),end=', ')

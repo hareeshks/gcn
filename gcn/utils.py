@@ -15,7 +15,7 @@ from os import path
 import copy
 import os
 import time
-
+import random
 
 def save_sparse_csr(filename, array):
     np.savez(filename, data=array.data, indices=array.indices,
@@ -42,8 +42,60 @@ def sample_mask(idx, l):
     mask[idx] = 1
     return np.array(mask, dtype=np.bool)
 
+def get_triplet(y_train, train_mask, max_triplets):
+#    print('y_train----',y_train.shape)        
+    index_nonzero = y_train.nonzero()
+#    for i in range(y_train.shape[1]):
+#        label_count.append(index_nonzero[1][[index_nonzero[1]==i]].size)
+    label_count = np.sum(y_train, axis=0)
+    all_count = np.sum(label_count)
+    
+    index_nonzero = np.transpose(np.concatenate((index_nonzero[0][np.newaxis,:], index_nonzero[1]\
+                                                 [np.newaxis, :]),axis=0)).tolist()
+        
+    index_nonzero = sorted(index_nonzero, key = lambda s: s[1])
+    print(index_nonzero)
+    print(label_count)
+ 
+    def get_one_triplet(input_index, index_nonzero, label_count, all_count, max_triplets):
+        triplet = []
+        if label_count[input_index[1]]==0 or label_count[input_index[1]]==1:
+            return 0
+        else:
+ #           print('max_triplets', max_triplets)
+  #          print(all_count)
+   #         print(label_count[input_index[1]])
+            n_triplets = min(max_triplets, int(all_count-label_count[input_index[1]]))
+   #         print('----------')
+            for j in range(int(label_count[input_index[1]])-1):
+                positives = []
+                negatives = []
+                            
+                for k, (value, label) in enumerate(index_nonzero):
+                    if label == input_index[1] and value != input_index[0]:
+                        positives.append(index_nonzero[k])
+                    if label != input_index[1]:
+                        negatives.append(index_nonzero[k])
+ #               print('positives' ,positives)
+ #               print('negatives', negatives)
+                negatives = random.sample(list(negatives), n_triplets)
+                for value, label in negatives:
+                    triplet.append([input_index[0], positives[j][0], value])
+            return triplet
+                
+                                   
+    triplet = []
+    for i, j in enumerate(index_nonzero):
+        triple = get_one_triplet(j, index_nonzero, label_count, all_count,max_triplets)
+        
+        if triple == 0:
+            continue
+        else:
+            triplet.extend(triple)  
+    np_triple = np.concatenate(np.array([triplet]), axis = 1)
+    return np_triple
 
-def load_data(dataset_str, train_size, validation_size):
+def load_data(dataset_str, train_size, validation_size, model_config):
     """Load data."""
     # if dataset_str in ['USPS-Fea', 'CIFAR-Fea', 'Cifar_10000_fea', 'Cifar_R10000_fea']:
     #     data = sio.loadmat('data/{}.mat'.format(dataset_str))
@@ -174,7 +226,9 @@ def load_data(dataset_str, train_size, validation_size):
         y_val[val_mask, :] = labels[val_mask, :]
         y_test[test_mask, :] = labels[test_mask, :]
 
-    return adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask
+		size_of_each_class = np.sum(labels[idx_train], axis=0)
+		triplet = get_triplet(y_train, train_mask, model_config['max_triplet'])
+    return adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask, size_of_each_class, triplet
 
 
 def sparse_to_tuple(sparse_mx):
@@ -1027,7 +1081,7 @@ def correct_label_count(indicator, i):
     print(count, '/', total, sep='', end='\t')
 
 
-def construct_feed_dict(features, support, labels, labels_mask, placeholders):
+def construct_feed_dict(features, support, labels, labels_mask, triplet, placeholders):
     """Construct feed dictionary."""
     feed_dict = dict()
     feed_dict.update({placeholders['labels']: labels})
@@ -1035,6 +1089,7 @@ def construct_feed_dict(features, support, labels, labels_mask, placeholders):
     feed_dict.update({placeholders['features']: features})
     feed_dict.update({placeholders['support'][i]: support[i] for i in range(len(support))})
     feed_dict.update({placeholders['num_features_nonzero']: features[1].shape})
+    feed_dict.update({placeholders['triplet']:triplet})
     return feed_dict
 
 
@@ -1090,6 +1145,7 @@ def preprocess_model_config(model_config):
             model_name += '_taubin' + str(model_config['taubin_lambda']) \
                           + '_' + str(model_config['taubin_mu']) \
                           + '_' + str(model_config['taubin_repeat'])
+		
         if model_config['validate']:
             model_name += '_validate'
         
@@ -1189,6 +1245,9 @@ def preprocess_model_config(model_config):
         
         if model_config['loss_func'] == 'imbalance':
             model_name+='_imbalance_beta'+str(model_config['ws_beta'])
+		if model_config['loss_func'] == 'triplet':
+            model_name+='_triplet_MARGIN'+str(model_config['MARGIN'])+'_lamda'+str(model_config['triplet_lamda'])+'_maxTrip'+ str(model_config['max_triplet'])
+			
         model_config['name'] = model_name
 
     # Generate logdir
