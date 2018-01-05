@@ -124,10 +124,10 @@ class GCN_MLP(object):
             if self.model_config['loss_func'] == 'imbalance':
                 self.loss += weighted_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
                                                             self.model_config['ws_beta'])
-			elif self.model_config['loss_func'] == 'triplet':
+            elif self.model_config['loss_func'] == 'triplet':
                     self.loss += triplet_softmax_cross_entropy(self.outputs, self.placeholders['labels'], self.placeholders['triplet'],
                                                              self.placeholders['labels_mask'], self.model_config['MARGIN'], self.model_config['triplet_lamda'])
-												 
+                                                 
             else:
                 self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
                                                       self.placeholders['labels_mask'])

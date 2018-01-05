@@ -226,8 +226,8 @@ def load_data(dataset_str, train_size, validation_size, model_config):
         y_val[val_mask, :] = labels[val_mask, :]
         y_test[test_mask, :] = labels[test_mask, :]
 
-		size_of_each_class = np.sum(labels[idx_train], axis=0)
-		triplet = get_triplet(y_train, train_mask, model_config['max_triplet'])
+    size_of_each_class = np.sum(labels[idx_train], axis=0)
+    triplet = get_triplet(y_train, train_mask, model_config['max_triplet'])
     return adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask, size_of_each_class, triplet
 
 
@@ -1145,7 +1145,7 @@ def preprocess_model_config(model_config):
             model_name += '_taubin' + str(model_config['taubin_lambda']) \
                           + '_' + str(model_config['taubin_mu']) \
                           + '_' + str(model_config['taubin_repeat'])
-		
+        
         if model_config['validate']:
             model_name += '_validate'
         
@@ -1245,9 +1245,9 @@ def preprocess_model_config(model_config):
         
         if model_config['loss_func'] == 'imbalance':
             model_name+='_imbalance_beta'+str(model_config['ws_beta'])
-		if model_config['loss_func'] == 'triplet':
+        if model_config['loss_func'] == 'triplet':
             model_name+='_triplet_MARGIN'+str(model_config['MARGIN'])+'_lamda'+str(model_config['triplet_lamda'])+'_maxTrip'+ str(model_config['max_triplet'])
-			
+            
         model_config['name'] = model_name
 
     # Generate logdir

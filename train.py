@@ -41,7 +41,7 @@ def train(model_config, sess, seed, data_split = None):
         train_mask  = data_split['train_mask']
         val_mask    = data_split['val_mask']
         test_mask   = data_split['test_mask']
-		triplet     = data_split['triplet']
+        triplet     = data_split['triplet']
     else:
         # Load data
         adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask, size_of_each_class, triplet = \
@@ -64,7 +64,7 @@ def train(model_config, sess, seed, data_split = None):
             'train_mask' : train_mask,
             'val_mask' : val_mask,
             'test_mask' : test_mask,
-			'triplet' : triplet
+            'triplet' : triplet
         }
     laplacian = sparse.diags(adj.sum(1).flat, 0) - adj
     laplacian = laplacian.astype(np.float32).tocoo()
@@ -256,13 +256,13 @@ def train(model_config, sess, seed, data_split = None):
         # helper variable for sparse dropout
         'laplacian' : tf.SparseTensor(indices=np.vstack([laplacian.row, laplacian.col]).transpose()
                                       , values=laplacian.data, dense_shape=laplacian.shape),
-		'triplet': tf.placeholder(tf.int32, name='triplet', shape=(None, None))
+        'triplet': tf.placeholder(tf.int32, name='triplet', shape=(None, None))
     }
     if model_config['Model'] in [11, 13, 14, 15]:
         placeholders['label_per_sample'] = tf.placeholder(tf.float32, name='label_per_sample', shape=(None, label_per_sample.shape[1]))
         placeholders['sample2label'] = tf.placeholder(tf.float32, name='sample2label', shape=(label_per_sample.shape[1], y_train.shape[1]))
 
-	weight=size_of_each_class
+    weight=size_of_each_class
     # Create model
     model = GCN_MLP(model_config, placeholders, input_dim=features[2][1])
 
@@ -469,7 +469,7 @@ if __name__ == '__main__':
                                                                           model_config['name']))
 
     for model_config, acc_of_class_mean in zip(configuration['model_list'], acc_of_class_means):
-		print(str(size_of_each_class)+' ', end='')
+        print(str(size_of_each_class)+' ', end='')
         print('[',end='')
         for acc_of_class in acc_of_class_mean:
             print('{:0<5.3}'.format(acc_of_class),end=', ')
