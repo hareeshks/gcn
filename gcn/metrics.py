@@ -52,6 +52,27 @@ def triplet_softmax_cross_entropy(preds, labels, triplet, mask, MARGIN, triplet_
     
     return tf.reduce_mean(loss)
 
+def triplet_normalize_softmax_cross_entropy(preds, labels, triplet, mask, MARGIN, triplet_lamda):
+
+    loss = tf.nn.softmax_cross_entropy_with_logits(logits=preds, labels=labels)
+    # train_anchor = preds[triplet[:,0],:]
+    # train_positive = preds[triplet[:,1],:]
+    # train_negative = preds[triplet[:,2],:]
+    anchor, positive, negative = tf.unstack(triplet, 3, axis = 1)
+    # normalize predictions
+    preds = tf.nn.l2_normalize(preds, 1)
+
+    train_anchor = tf.gather(preds, anchor)
+    train_positive = tf.gather(preds, positive)
+    train_negative = tf.gather(preds, negative)
+    loss_triple, positives, negatives = compute_triplet_loss(train_anchor, train_positive, train_negative, MARGIN)
+    mask = tf.cast(mask, dtype=tf.float32)
+    mask /= tf.reduce_mean(mask)
+    loss = loss + triplet_lamda*loss_triple
+    loss *= mask
+    
+    return tf.reduce_mean(loss)
+
 
 def weighted_softmax_cross_entropy(preds, labels, beta):
     print('A')
