@@ -109,7 +109,9 @@ configuration ={
         'drop_inter_class_edge': False,
         'loss_func'         :'default',     #'imbalance', 'triplet'
         'ws_beta'           : 20,
-		'max_triplet':1000  #for triplet, 1000 for cora to get all tripets
+		'max_triplet'       : 1000,  #for triplet, 1000 for cora to get all tripets
+        'hard'              : False,
+        'normal'            : False
     },
 
     # The list of model to be train.
@@ -122,15 +124,20 @@ configuration ={
             'conv'              : 'gcn',
             'loss_func'         : 'triplet',
             'MARGIN' : margin,
-            'triplet_lamda':1.0
-        } for margin in [0.1,0.2, 0.3, 0.4, 0.5]
+            #'soft_lambda': soft_lambda
+            'triplet_lamda':triplet_lambda,
+            'early_stopping': early
+        } for early in range(100, 455, 50)
+        for margin in [0.3]
+        for triplet_lambda in [1]
     ] +
     [
         {
             'Model' : 0,
             'connection'        : 'cc',
             'conv'              : 'gcn',
-        }
+            'early_stopping':   early2
+        }for early2 in range(100, 455, 50)
     ]
 }
 
