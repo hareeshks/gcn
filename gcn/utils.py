@@ -97,6 +97,121 @@ def get_triplet(y_train, train_mask, max_triplets):
     np_triple = np.concatenate(np.array([triplet]), axis = 1)
     return np_triple
 
+def get_triplet_hard(features, y_train, train_mask, max_triplets):
+    # print('y_train----',y_train.shape)        
+    index_nonzero = y_train.nonzero()
+    # for i in range(y_train.shape[1]):
+        # label_count.append(index_nonzero[1][[index_nonzero[1]==i]].size)
+    label_count = np.sum(y_train, axis=0)
+    all_count = np.sum(label_count)
+    
+    index_nonzero = np.transpose(np.concatenate((index_nonzero[0][np.newaxis,:], index_nonzero[1]\
+                                                 [np.newaxis, :]),axis=0)).tolist()
+        
+    index_nonzero = sorted(index_nonzero, key = lambda s: s[1])
+    #print(index_nonzero)
+    #print(label_count)
+    
+    def eucldist_vectorized(coords1, coords2):
+       # print('coords1', coords1)
+       # print('coords2', coords2)
+        return np.sqrt(np.sum(coords1.todense() - coords2.todense())**2)
+
+    def get_one_triplet(features, input_index, index_nonzero, label_count, all_count, max_triplets):
+        triplet = []
+        if label_count[input_index[1]]==0:
+            return 0
+        elif label_count[input_index[1]]==1:
+            positives = []
+            negatives = [[] for i in range(len(label_count))]
+      
+            negatives_filter = []
+            for k, (value, label) in enumerate(index_nonzero):
+                if label == input_index[1]:
+                    positives.append(index_nonzero[k])
+                if label != input_index[1]:
+                    
+                    negatives[label].append(index_nonzero[k])
+ #               print('positives' ,positives)
+ #               print('negatives', negatives)
+            for k, pairs in enumerate(negatives):
+                dist = np.inf
+                value_n = 0
+                if pairs == None:
+                    continue
+                for value,label in pairs:
+                    dist_current = eucldist_vectorized(features[value,:], features[input_index[0],:])
+                    if dist_current <= dist:
+                        value_n = value
+                        dist = dist_current
+                        
+                negatives_filter.append(value_n) 
+            n_triplets = min(max_triplets, len(negatives_filter))
+
+            negatives_filter = random.sample(list(negatives_filter), n_triplets)
+            for value in negatives_filter:
+                triplet.append([input_index[0], positives[0][0], value])
+            return triplet
+        else:
+ #           print('max_triplets', max_triplets)
+  #          print(all_count)
+   #         print(label_count[input_index[1]])
+   #         print('----------')
+            positives = []
+            #store negtives for every class in each list, in total 7 lists
+            negatives = [[] for i in range(len(label_count))]
+            positives_filter = []
+            negatives_filter = []
+            for k, (value, label) in enumerate(index_nonzero):
+                if label == input_index[1] and value != input_index[0]:
+                    positives.append(index_nonzero[k])
+                if label != input_index[1]:
+                    negatives[label].append(index_nonzero[k])
+ #               print('positives' ,positives)
+ #               print('negatives', negatives)
+#            print('positives', positives)
+            for value, label in positives:
+                dist = 0
+                value_n = 0
+ #               print(value)
+ #               print(features[value,:].shape)
+                dist_current = eucldist_vectorized(features[value,:], features[input_index[0],:])
+                if dist_current >= dist:
+                    value_n = value
+                    dist = dist_current
+                positives_filter.append(value_n)
+            for k, pairs in enumerate(negatives):
+                dist = np.inf
+                value_n = 0
+                if pairs == None:
+                    continue
+                for value,label in pairs:
+                    dist_current = eucldist_vectorized(features[value,:], features[input_index[0],:])
+                    if dist_current <= dist:
+                        value_n = value
+                        dist = dist_current
+                        
+                negatives_filter.append(value_n) 
+            n_triplets = min(max_triplets, len(negatives_filter))
+            negatives_filter = random.sample(list(negatives_filter), n_triplets)
+       
+            for value in negatives_filter:
+                triplet.append([input_index[0], positives_filter[0], value])
+#            print('triplet', triplet)
+            return triplet
+                
+                                   
+    triplet = []
+    for i, j in enumerate(index_nonzero):
+        triple = get_one_triplet(features, j, index_nonzero, label_count, all_count,max_triplets)
+        
+        if triple == 0:
+            continue
+        else:
+            triplet.extend(triple)
+    np_triple = np.concatenate(np.array([triplet]), axis = 1)
+    return np_triple
+
 def load_data(dataset_str, train_size, validation_size, model_config):
     """Load data."""
     # if dataset_str in ['USPS-Fea', 'CIFAR-Fea', 'Cifar_10000_fea', 'Cifar_R10000_fea']:
@@ -181,10 +296,14 @@ def load_data(dataset_str, train_size, validation_size, model_config):
         no_class = labels.shape[1]  # number of class
         validation_size = validation_size * len(idx) // 100
         if hasattr(train_size, '__getitem__'):
+            print('A')
+            # comment to not shuffle for test
             np.random.shuffle(idx)
             idx_train = []
             count = [0 for i in range(no_class)]
             label_each_class = train_size
+            # label_each_class = [3, 2, 2, 4, 6, 22, 28]
+            # label_each_class = [2, 11, 2, 3, 1, 2, 4]
             for i in idx:
                 for j in range(no_class):
                     if labels[i, j] and count[j] < label_each_class[j]:
@@ -193,6 +312,7 @@ def load_data(dataset_str, train_size, validation_size, model_config):
         else:
             labels_of_class = [0]
             while (np.prod(labels_of_class) == 0):
+                # comment to not shuffle for test
                 np.random.shuffle(idx)
                 idx_train = idx[0:int(len(idx) * train_size // 100)]
                 labels_of_class = np.sum(labels[idx_train], axis=0)
@@ -229,7 +349,13 @@ def load_data(dataset_str, train_size, validation_size, model_config):
         y_test[test_mask, :] = labels[test_mask, :]
 
     size_of_each_class = np.sum(labels[idx_train], axis=0)
-    triplet = get_triplet(y_train, train_mask, model_config['max_triplet'])
+    # triplet = get_triplet(y_train, train_mask, model_config['max_triplet'])
+    if model_config['hard']==True:
+        triplet = get_triplet_hard(features, y_train, train_mask, model_config['max_triplet'])
+        print('hard', triplet.shape)
+    else:
+        triplet = get_triplet( y_train, train_mask, model_config['max_triplet'])
+        print('not hard', triplet.shape)
     return adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask, size_of_each_class, triplet
 
 
@@ -1248,7 +1374,15 @@ def preprocess_model_config(model_config):
         if model_config['loss_func'] == 'imbalance':
             model_name+='_imbalance_beta'+str(model_config['ws_beta'])
         if model_config['loss_func'] == 'triplet':
-            model_name+='_triplet_MARGIN'+str(model_config['MARGIN'])+'_lamda'+str(model_config['triplet_lamda'])+'_maxTrip'+ str(model_config['max_triplet'])
+            flag_advance=False
+            if model_config['hard']==True:
+                model_name+='_triplet_'+str(model_config['MARGIN'])+'_lamda'+str(model_config['triplet_lamda'])+'_'+ str(model_config['max_triplet'])+'_hard'
+                flag_advance=True
+            elif model_config['normal']==True:
+                model_name+='_NormTriplet_'+str(model_config['MARGIN'])+'_lamda'+str(model_config['triplet_lamda'])+'_'+ str(model_config['max_triplet'])
+                flag_advance=True
+            if not(flag_advance):
+                model_name+='_triplet_'+str(model_config['MARGIN'])+'_lamda'+str(model_config['triplet_lamda'])+'_'+ str(model_config['max_triplet'])
             
         model_config['name'] = model_name
 
