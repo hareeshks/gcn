@@ -17,6 +17,7 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
 import time
 import random
+# import matplotlib.pyplot as plt
 
 def save_sparse_csr(filename, array):
     np.savez(filename, data=array.data, indices=array.indices,
@@ -969,8 +970,10 @@ def smooth(features, adj, smoothing, alpha=None, beta=None, stored_A=None, poly_
         return new_feature
     elif smoothing == 'test21':
         return Test21(adj, features, alpha, beta, stored_A)
+    elif smoothing == 'test27':
+        return Test27(adj, features, alpha, beta, stored_A)
     else:
-        raise ValueError("smoothing must be one of 'poly' | 'ap' | 'taubin'")
+        raise ValueError("smoothing must be one of 'poly' | 'ap' | 'taubin' | 'test21' | 'test27' ")
 
 
 def Model22(adj, features, alpha, stored_A=None):
@@ -980,8 +983,28 @@ def Model22(adj, features, alpha, stored_A=None):
 
 def Test21(adj, features, alpha, beta, stored_A=None):
     P = absorption_probability(adj + sp.eye(adj.shape[0]), alpha, stored_A=stored_A)
-    P = (P > (beta / alpha)).astype(np.int)
+    P = (P > (beta / alpha)).astype(np.float32)
+    # normalize(P, norm='l1', axis=1, copy=False)
     return sp.csr_matrix(P * alpha * features)
+
+def Test27(adj, features, alpha, beta, stored_A=None):
+    P = absorption_probability(adj + sp.eye(adj.shape[0]), alpha, stored_A=stored_A)
+    # np.sort(P)
+    P *= alpha
+    # P = np.array([
+    #     [0.1, 0.5, 0.4],
+    #     [0.2, 0.7, 0.1],
+    #     [0.4, 0.3, 0.3]
+    # ])
+    P_index = np.argsort(P, axis=1)
+    P_acc = np.add.accumulate(np.sort(P, axis=1), axis=1)
+    # plt.plot(np.add.accumulate(alpha * np.sort(P, axis=None)))
+    # plt.show()
+    num = np.sum(P_acc <= (1-beta), axis=1)
+    gate = P[np.arange(P.shape[0]), P_index[np.arange(P.shape[0]), np.maximum(num-1, 0)]]
+    P[P <= [gate]]=0
+    P=normalize(P, norm='l1', axis=1, copy=False)
+    return sp.csr_matrix(P * features)
 
 
 def Model26(W, t, alpha, y_train, train_mask, stored_A=None):
@@ -1136,6 +1159,8 @@ def preprocess_model_config(model_config):
             model_name += '_' + 'ap_smoothing' + str(model_config['alpha'])
         elif model_config['smoothing'] == 'test21':
             model_name += '_' + 'test21' + '_' + str(model_config['alpha']) + '_' + str(model_config['beta'])
+        elif model_config['smoothing'] == 'test27':
+            model_name += '_' + 'test27' + '_' + str(model_config['alpha']) + '_' + str(model_config['beta'])
         elif model_config['smoothing'] == 'poly':
             model_name += '_' + 'poly_smoothing'
             for a in model_config['poly_parameters']:
