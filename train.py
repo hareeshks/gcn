@@ -425,13 +425,14 @@ def train(model_config, sess, seed, data_split = None):
                 save_path=path.join(model_config['logdir'], 'model.ckpt'),
                 global_step=global_step)))
     print("Total time={}s".format(time.time()-very_begining))
-    return test_acc, test_acc_of_class, prediction, size_of_each_class
+    return test_acc, test_acc_of_class, prediction, size_of_each_class, time.time()-very_begining
 
 
 if __name__ == '__main__':
 
     acc = [[] for i in configuration['model_list']]
     acc_of_class = [[] for i in configuration['model_list']]
+    duration = [[] for i in configuration['model_list']]
     # acc_without_valid = [[] for i in configuration['model_list']]
     # acc_of_class_without_valid = [[] for i in configuration['model_list']]
     # Read configuration
@@ -447,25 +448,28 @@ if __name__ == '__main__':
                 tf.set_random_seed(seed)
                 with tf.Session(config=tf.ConfigProto(
                         intra_op_parallelism_threads=model_config['threads'])) as sess:
-                    test_acc, test_acc_of_class, prediction, size_of_each_class = train(model_config, sess, seed)
+                    test_acc, test_acc_of_class, prediction, size_of_each_class, t = train(model_config, sess, seed)
                     acc[i].append(test_acc)
                     acc_of_class[i].append(test_acc_of_class)
+                    duration[i].append(t)
                     # acc_without_valid[i].append(test_acc_without_valid)
                     # acc_of_class_without_valid[i].append(test_acc_of_class_without_valid)
 
     acc_means = np.mean(acc, axis=1)
     acc_stds = np.std(acc, axis=1)
     acc_of_class_means = np.mean(acc_of_class, axis=1)
+    duration = np.mean(duration, axis=1)
     # print mean, standard deviation, and model name
     print()
     print("REPEAT\t{}".format(configuration['repeating']))
-    print("{:<8}\t{:<8}\t{:<8}\t{:<8}\t{:<8}\t{:<8}".format('DATASET', 'train_size', 'valid_size', 'RESULTS', 'STD', 'NAME'))
-    for model_config, acc_mean, acc_std in zip(configuration['model_list'], acc_means, acc_stds):
-        print("{:<8}\t{:<8}\t{:<8}\t{:<8.6f}\t{:<8.6f}\t{:<8}".format(model_config['dataset'],
+    print("{:<8}\t{:<8}\t{:<8}\t{:<8}\t{:<8}\t{:<8}\t{:<8}".format('DATASET', 'train_size', 'valid_size', 'RESULTS', 'STD', 'TIME', 'NAME'))
+    for model_config, acc_mean, acc_std, t in zip(configuration['model_list'], acc_means, acc_stds, duration):
+        print("{:<8}\t{:<8}\t{:<8}\t{:<8.6f}\t{:<8.6f}\t{:<8.2f}\t{:<8}".format(model_config['dataset'],
                                                                           str(model_config['train_size']) + '%',
                                                                           str(model_config['validation_size']) + '%',
                                                                           acc_mean,
                                                                           acc_std,
+                                                                          t,
                                                                           model_config['name']))
 
     for model_config, acc_of_class_mean in zip(configuration['model_list'], acc_of_class_means):
