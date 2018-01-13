@@ -11,7 +11,7 @@ from os import path
 from gcn.utils import construct_feed_dict, preprocess_features, drop_inter_class_edge,\
     preprocess_adj, chebyshev_polynomials, load_data, sparse_to_tuple, \
     Model1, Model2, Model3, Model4, Model5, Model6, Model7, Model8, Model9, \
-    Model10, Model11, Model12, Model16, Model17, Model19, Model20, Model22, taubin_smoothor, smooth, Model26
+    Model10, Model11, Model12, Model16, Model17, Model19, Model20, Model22, taubin_smoothor, smooth, Model26, Test21
 from gcn.models import GCN_MLP
 
 from config import configuration, args
@@ -231,6 +231,9 @@ def train(model_config, sess, seed, data_split = None):
     elif model_config['conv'] == 'taubin':
         support = [sparse_to_tuple(taubin_smoothor(adj, model_config['taubin_lambda'], model_config['taubin_mu'], model_config['taubin_repeat']))]
         num_supports = 1
+    elif model_config['conv'] == 'test21':
+        support = [sparse_to_tuple(Test21(adj, model_config['alpha'], beta=model_config['beta'], stored_A=model_config['dataset'] + '_A_I'))]
+        num_supports = 1
     elif model_config['conv'] == 'gcn':
         # origin_adj_support = [preprocess_adj(origin_adj)]
         support = [preprocess_adj(adj)]
@@ -373,7 +376,7 @@ def train(model_config, sess, seed, data_split = None):
 
             # If it's best performence so far, evalue on test set
             if model_config['validate']:
-                if valid_acc > max_valid_acc:
+                if valid_acc >= max_valid_acc:
                     max_valid_acc = valid_acc
                     t_test = time.time()
                     test_cost, test_acc, test_acc_of_class = sess.run(
@@ -382,7 +385,7 @@ def train(model_config, sess, seed, data_split = None):
                     test_duration = time.time() - t_test
                     prediction = sess.run(model.prediction,train_feed_dict)
             else:
-                if train_acc > max_train_acc:
+                if train_acc >= max_train_acc:
                     max_train_acc = train_acc
                     t_test = time.time()
                     test_cost, test_acc, test_acc_of_class = sess.run(

@@ -29,7 +29,7 @@ import pprint
 # 27 Test21 with different threshold for different row (preserve beta energy)
 configuration ={
     # repeating times
-    'repeating'             : 1,
+    'repeating'             : 10,
 
     # The default model configuration
     'default':{
@@ -38,7 +38,7 @@ configuration ={
         # 'train_size'        : [20, 20, 20, 20, 20, 20, 20], # if train_size is a list of numbers, then it specifies training lables for each class.
         'validation_size'   : 20,           # 'Use VALIDATION_SIZE% data to train model'
         'validate'          : False,        # Whether use validation set
-        'conv'              : 'gcn',        # 'conv type. (gcn | cheby | chebytheta | gcn_rw | taubin)'
+        'conv'              : 'gcn',        # 'conv type. (gcn | cheby | chebytheta | gcn_rw | taubin | test21)'
         'max_degree'        : 2,            # 'Maximum Chebyshev polynomial degree.'
         'learning_rate'     : 0.02,         # 'Initial learning rate.'
         'epochs'            : 200,          # 'Number of epochs to train.'
@@ -116,35 +116,27 @@ configuration ={
     # The list of model to be train.
     # Only configurations that's different with default are specified here
     'model_list':
-    # [
-    #     {
-    #         'Model' : 0,
-    #         'connection'        : 'cc',
-    #         'conv'              : 'gcn',
-    #         'loss_func'         : 'triplet',
-    #         'MARGIN' : margin,
-    #         'triplet_lamda':1.0
-    #     } for margin in [0.1,0.2, 0.3, 0.4, 0.5]
-    # ] +
     [
+        # gcn
         {
             'Model' : 0,
             'smoothing'         :  None,
             'connection'        : 'cc',
             'conv'              : 'gcn',
-        }
+        },
     ] +
     [
+        # only one convolutional layer
         {
-            'Model' : 0,
-            'smoothing'         :'test27',
-            'alpha'             : 0.3,
-            'beta'              : beta,
-            'connection'        : 'ff',
-            'conv'              : 'gcn',
-        } for beta in [0.2, 0.5, 0.8, 1]
+            'Model': 0,
+            'connection': 'cf',
+            'conv': 'test21',
+            'alpha': 0.3,
+            'beta': 0.001,
+        },
     ] +
     [
+        # smoothing by test21
         {
             'Model' : 0,
             'smoothing'         :'test21',
@@ -152,7 +144,7 @@ configuration ={
             'beta'              : 0.001,
             'connection'        : 'ff',
             'conv'              : 'gcn',
-        }
+        },
     ]
 }
 
