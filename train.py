@@ -251,7 +251,7 @@ def train(model_config, sess, seed, data_split = None):
     # Define placeholders
     placeholders = {
         'support': [tf.sparse_placeholder(tf.float32, name='support' + str(i)) for i in range(num_supports)],
-        'features': tf.sparse_placeholder(tf.float32, name='features', shape=np.array(features[2], dtype=np.int64)),
+        'features': tf.sparse_placeholder(tf.float32, name='features'),
         'labels': tf.placeholder(tf.int32, name='labels', shape=(None, y_train.shape[1])),
         'labels_mask': tf.placeholder(tf.int32, name='labels_mask'),
         'dropout': tf.placeholder_with_default(0., name='dropout', shape=()),

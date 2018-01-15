@@ -29,7 +29,7 @@ import pprint
 # 27 Test21 with different threshold for different row (preserve beta energy)
 configuration ={
     # repeating times
-    'repeating'             : 10,
+    'repeating'             : 1,
 
     # The default model configuration
     'default':{
@@ -121,31 +121,46 @@ configuration ={
         {
             'Model' : 0,
             'smoothing'         :  None,
+            'connection'        : 'cf',
+            'conv'              : 'taubin',
+            'taubin_lambda'     : 1,
+            'taubin_mu'         : 0,
+            'taubin_repeat'     : repeat,
+        } for repeat in [2,3,4,5]
+    ] +
+    [
+        # gcn
+        {
+            'Model' : 0,
+            'smoothing'         :  None,
             'connection'        : 'cc',
             'conv'              : 'gcn',
         },
-    ] +
-    [
-        # only one convolutional layer
-        {
-            'Model': 0,
-            'connection': 'cf',
-            'conv': 'test21',
-            'alpha': 0.3,
-            'beta': 0.001,
-        },
-    ] +
-    [
-        # smoothing by test21
-        {
-            'Model' : 0,
-            'smoothing'         :'test21',
-            'alpha'             : 0.3,
-            'beta'              : 0.001,
-            'connection'        : 'ff',
-            'conv'              : 'gcn',
-        },
     ]
+    # +
+    # [
+    #     # only one convolutional layer
+    #     {
+    #         'Model': 0,
+    #         'connection': 'cf',
+    #         'conv': 'test21',
+    #         'alpha': 0.3,
+    #         'beta': 0.001,
+    #         'dropout' : 0,
+    #     },
+    # ] +
+    # [
+    #     # smoothing by test21
+    #     {
+    #         'Model' : 0,
+    #         'smoothing'         :'test21',
+    #         'alpha'             : 0.3,
+    #         'beta'              : 0.001,
+    #         'connection'        : 'ff',
+    #         'conv'              : 'gcn',
+    #         'dropout' : 0,
+    #     },
+    # ]
 }
 
 # Parse args

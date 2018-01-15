@@ -17,6 +17,7 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
 import time
 import random
+import tensorflow as tf
 # import matplotlib.pyplot as plt
 
 def save_sparse_csr(filename, array):
@@ -230,7 +231,10 @@ def load_data(dataset_str, train_size, validation_size, model_config):
         y_test[test_mask, :] = labels[test_mask, :]
 
     size_of_each_class = np.sum(labels[idx_train], axis=0)
-    triplet = get_triplet(y_train, train_mask, model_config['max_triplet'])
+    if model_config['loss_func'] == 'triplet':
+        triplet = get_triplet(y_train, train_mask, model_config['max_triplet'])
+    else:
+        triplet = []
     return adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask, size_of_each_class, triplet
 
 
@@ -243,7 +247,7 @@ def sparse_to_tuple(sparse_mx):
         coords = np.vstack((mx.row, mx.col)).transpose()
         values = mx.data
         shape = mx.shape
-        return coords, values, shape
+        return tf.SparseTensorValue(coords, values, np.array(shape, dtype=np.int64))
 
     if isinstance(sparse_mx, list):
         for i in range(len(sparse_mx)):
@@ -1117,7 +1121,8 @@ def construct_feed_dict(features, support, labels, labels_mask, triplet, placeho
     feed_dict.update({placeholders['features']: features})
     feed_dict.update({placeholders['support'][i]: support[i] for i in range(len(support))})
     feed_dict.update({placeholders['num_features_nonzero']: features[1].shape})
-    feed_dict.update({placeholders['triplet']:triplet})
+    if len(triplet):
+        feed_dict.update({placeholders['triplet']:triplet})
     return feed_dict
 
 
