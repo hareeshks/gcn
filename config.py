@@ -134,6 +134,18 @@ configuration ={
             'Model' : 0,
             'smoothing'         :  None,
             'connection'        : 'cc',
+            'conv'              : 'taubin',
+            'taubin_lambda'     : 1,
+            'taubin_mu'         : 0,
+            'taubin_repeat'     : repeat,
+        } for repeat in [2,3,4,5]
+    ] +
+    [
+        # gcn
+        {
+            'Model' : 0,
+            'smoothing'         :  None,
+            'connection'        : 'cc',
             'conv'              : 'gcn',
         },
     ]
