@@ -16,7 +16,8 @@ class GCN_MLP(object):
         self.vars = {}
         self.layers = []
         self.activations = []
-        self.act = tf.nn.relu
+        self.act = [tf.nn.relu for i in range(len(self.model_config['connection']))]
+        self.act[-1] = lambda x: x
 
         self.placeholders = placeholders
         self.inputs = placeholders['features']
@@ -52,12 +53,12 @@ class GCN_MLP(object):
         with tf.name_scope(self.name):
             self.global_step = tf.Variable(0, name='global_step', trainable=False)
             self.activations.append(self.inputs)
-            for output_dim, layer_cls in zip(layer_size[1:], layer_type):
+            for output_dim, layer_cls, act in zip(layer_size[1:], layer_type, self.act):
                 # create Variables
                 self.layers.append(layer_cls(input=self.activations[-1],
                                              output_dim=output_dim,
                                              placeholders=self.placeholders,
-                                             act=self.act,
+                                             act=act,
                                              dropout=True,
                                              sparse_inputs=sparse,
                                              logging=self.logging,
