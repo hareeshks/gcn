@@ -25,8 +25,9 @@ import pprint
 # 23 svm
 # 24 Test21
 # 25 Test22
-# 26 Model9+modify adjacency matrix
+# 26 Model9 with extra edges
 # 27 Test21 with different threshold for different row (preserve beta energy)
+# 28 imitate spectral clustering
 configuration ={
     # repeating times
     'repeating'             : 1,
@@ -120,59 +121,64 @@ configuration ={
         # gcn
         {
             'Model' : 0,
-            'smoothing'         :  None,
-            'connection'        : 'cf',
-            'conv'              : 'taubin',
+            'smoothing'         :  'taubin',
+            'connection'        : 'ff',
             'taubin_lambda'     : 1,
             'taubin_mu'         : 0,
-            'taubin_repeat'     : repeat,
-        } for repeat in [2,3,4,5]
+            'taubin_repeat'     : 2,
+        }
     ] +
+    # [
+    #     # gcn
+    #     {
+    #         'Model' : 0,
+    #         'smoothing'         :  None,
+    #         'connection'        : 'cc',
+    #         'conv'              : 'taubin',
+    #         'taubin_lambda'     : 1,
+    #         'taubin_mu'         : 0,
+    #         'taubin_repeat'     : repeat,
+    #     } for repeat in [2,3,4,5]
+    # ] +
     [
-        # gcn
         {
             'Model' : 0,
-            'smoothing'         :  None,
             'connection'        : 'cc',
-            'conv'              : 'taubin',
-            'taubin_lambda'     : 1,
-            'taubin_mu'         : 0,
-            'taubin_repeat'     : repeat,
-        } for repeat in [2,3,4,5]
+            'conv'              : 'gcn',
+        }
+    ] +
+    # [
+    #     # gcn
+    #     {
+    #         'Model' : 28,
+    #         'smoothing'         :  None,
+    #         'connection'        : 'ff',
+    #         'conv'              : 'gcn',
+    #         'k'                 : k
+    #     } for k in [150, 200, 300]
+    # ]
+    # +
+    [
+        # only one convolutional layer
+        {
+            'Model': 0,
+            'connection': 'cf',
+            'conv': 'test21',
+            'alpha': 0.3,
+            'beta': 0.001,
+        },
     ] +
     [
-        # gcn
+        # smoothing by test21
         {
             'Model' : 0,
-            'smoothing'         :  None,
-            'connection'        : 'cc',
+            'smoothing'         :'test21',
+            'alpha'             : 0.3,
+            'beta'              : 0.001,
+            'connection'        : 'ff',
             'conv'              : 'gcn',
         },
     ]
-    # +
-    # [
-    #     # only one convolutional layer
-    #     {
-    #         'Model': 0,
-    #         'connection': 'cf',
-    #         'conv': 'test21',
-    #         'alpha': 0.3,
-    #         'beta': 0.001,
-    #         'dropout' : 0,
-    #     },
-    # ] +
-    # [
-    #     # smoothing by test21
-    #     {
-    #         'Model' : 0,
-    #         'smoothing'         :'test21',
-    #         'alpha'             : 0.3,
-    #         'beta'              : 0.001,
-    #         'connection'        : 'ff',
-    #         'conv'              : 'gcn',
-    #         'dropout' : 0,
-    #     },
-    # ]
 }
 
 # Parse args

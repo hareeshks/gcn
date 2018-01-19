@@ -945,10 +945,15 @@ def Model20(prediction, t, y_train, train_mask, W, alpha, stored_A):
     return y_train, train_mask
 
 
-def smooth(features, adj, smoothing, alpha=None, beta=None, stored_A=None, poly_parameters=None):
+def smooth(features, adj, smoothing, model_config):
+    alpha = model_config['alpha']
+    beta = model_config['beta']
+    stored_A = model_config['dataset'] + '_A_I'
+
     if smoothing is None:
         return features
     if smoothing == 'poly':
+        poly_parameters = model_config['poly_parameters']
         adj = normalize_adj(adj + sp.eye(adj.shape[0]), type='rw')
         n = adj.shape[0]
         # adj = adj.copy().astype(np.float32)
@@ -961,7 +966,8 @@ def smooth(features, adj, smoothing, alpha=None, beta=None, stored_A=None, poly_
     elif smoothing == 'ap':
         return Model22(adj, features, alpha, stored_A)
     elif smoothing == 'taubin':
-        pass
+        smoothor = taubin_smoothor(adj, model_config['taubin_lambda'], model_config['taubin_mu'], model_config['taubin_repeat'])
+        return sp.csr_matrix(smoothor.dot(features))
     elif smoothing == 'ap_appro':
         adj = normalize_adj(adj + sp.eye(adj.shape[0]), type='rw')
         # n = adj.shape[0]
@@ -1052,6 +1058,47 @@ def Model26(W, t, alpha, y_train, train_mask, stored_A=None):
         correct_label_count(index, i)
     return sp.csr_matrix(W)
 
+def Model28(adj, features, dataset, k):
+    n = adj.shape[0]
+    adj_I = adj + sp.diags(np.ones(n))
+    adj_I_sym = normalize_adj(adj_I)
+
+    try:
+        # raise Exception('Debug')
+        vals, vecs, vec_inv = np.load(dataset+'_I_vals.npy'), \
+                              np.load(dataset+'_I_vecs.npy'), \
+                              np.load(dataset + '_I_vec_inv.npy')
+        print('load vals, vecs, vec_inv from files')
+    except:
+        vals, vecs = slinalg.eigsh(adj_I_sym, k=adj_I_sym.shape[0]-1)
+        vecs = normalize(vecs, norm='l2', axis=0, copy=False)
+        # vecs = d_I_inv_sqrt.dot(vecs)
+        # vec_inv = np.linalg.inv(vecs)
+        vec_inv = vecs.T
+
+        # vals = vals.astype(np.float64)
+        # vec_inv = vec_inv.astype(np.float64)
+        np.save(dataset+'_I_vals.npy', vals)
+        np.save(dataset+'_I_vecs.npy', vecs)
+        np.save(dataset+'_I_vec_inv.npy', vec_inv)
+
+    vals = 1-vals
+    vecs = vecs[:, -k:]
+    vals = vals[-k:]
+    # vals_u = np.unique((1e8*vals).astype(np.int64))/1e8
+    # sum_matrix = np.expand_dims(vals, axis=1) - np.expand_dims(vals_u, axis=0)
+    # sum_matrix = (np.abs(sum_matrix) < 1e-7).astype(np.float32)
+    # sum_matrix = np.zeros([300, 30])
+    # sum_matrix[np.arange(300),np.arange(30).repeat(10)] = 1
+    sum_matrix = np.ones([k, 1])
+    return vecs
+    features = features.T.dot(vecs)
+    features = features.reshape([features.shape[0], 1, features.shape[1]])
+    features = vecs.reshape([1]+list(vecs.shape))*features
+    features = features.dot(sum_matrix)
+    features = np.transpose(features, axes=(1,0,2))
+    features = features.reshape([n, -1])
+    return sp.csr_matrix(features, dtype=np.float32)
 
 def taubin_smoothor(adj, lam, mu, repeat):
     n = adj.shape[0]
@@ -1279,6 +1326,8 @@ def preprocess_model_config(model_config):
         if model_config['Model'] == 22:
             model_name += '_alpha_' + str(model_config['alpha'])
             raise ValueError('Please use model 0 with smoothing.')
+        if model_config['Model'] == 28:
+            model_name += '_k' + str(model_config['k'])
         
         if model_config['loss_func'] == 'imbalance':
             model_name+='_imbalance_beta'+str(model_config['ws_beta'])
