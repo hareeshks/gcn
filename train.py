@@ -11,7 +11,7 @@ from os import path
 from gcn.utils import construct_feed_dict, preprocess_features, drop_inter_class_edge,\
     preprocess_adj, chebyshev_polynomials, load_data, sparse_to_tuple, \
     Model1, Model2, Model3, Model4, Model5, Model6, Model7, Model8, Model9, \
-    Model10, Model11, Model12, Model16, Model17, Model19, Model20, Model22, taubin_smoothor, smooth, Model26, Test21
+    Model10, Model11, Model12, Model16, Model17, Model19, Model20, Model22, taubin_smoothor, smooth, Model26, Test21, Model28
 from gcn.models import GCN_MLP
 
 from config import configuration, args
@@ -48,13 +48,13 @@ def train(model_config, sess, seed, data_split = None):
             load_data(model_config['dataset'],
                       train_size=model_config['train_size'],
                       validation_size=model_config['validation_size'], model_config=model_config)
-        # preprocess_features
-        features = preprocess_features(features, feature_type=model_config['feature'])
-        features = smooth(features, adj, model_config['smoothing'],
-                          alpha=model_config['alpha'], beta=model_config['beta'], stored_A=model_config['dataset'] + '_A_I',
-                          poly_parameters=model_config['poly_parameters'])
+        stored_A = model_config['dataset']
         if model_config['drop_inter_class_edge']:
             adj = drop_inter_class_edge(adj)
+            stored_A = model_config['dataset']+'_drop'
+        # preprocess_features
+        features = preprocess_features(features, feature_type=model_config['feature'])
+        features = smooth(features, adj, model_config['smoothing'], model_config, stored_A=stored_A + '_A_I')
         data_split = {
             'adj' : adj,
             'features' : features,
@@ -103,10 +103,10 @@ def train(model_config, sess, seed, data_split = None):
         y_train, train_mask = Model8(adj, model_config['s'], model_config['alpha'], y_train, train_mask)
     elif model_config['Model'] == 9:
         y_train, train_mask = Model9(adj, model_config['t'], model_config['alpha'],
-                                     y_train, train_mask, stored_A = model_config['dataset']+'_A_I')
+                                     y_train, train_mask, stored_A = stored_A+'_A_I')
     elif model_config['Model'] == 10:
         y_train, train_mask = Model10(adj, model_config['s'], model_config['t'], model_config['alpha'],
-                                      y_train, train_mask, features, stored_A = model_config['dataset']+'_A_H')
+                                      y_train, train_mask, features, stored_A = stored_A+'_A_H')
     elif model_config['Model'] == 11:
         y = np.sum(train_mask)
         label_per_sample, sample2label = Model11(y, y_train, train_mask)
@@ -114,7 +114,7 @@ def train(model_config, sess, seed, data_split = None):
         pass
     elif model_config['Model'] == 13:
         y_train, train_mask = Model9(adj, model_config['t'], model_config['alpha'],
-                                     y_train, train_mask, stored_A = model_config['dataset']+'_A_I')
+                                     y_train, train_mask, stored_A = stored_A+'_A_I')
         y = np.sum(train_mask)
         label_per_sample, sample2label = Model11(y, y_train, train_mask)
     elif model_config['Model'] == 14:
@@ -122,7 +122,7 @@ def train(model_config, sess, seed, data_split = None):
         label_per_sample, sample2label = Model11(y, y_train, train_mask)
     elif model_config['Model'] == 15:
         y_train, train_mask = Model9(adj, model_config['t'], model_config['alpha'],
-                                     y_train, train_mask, stored_A = model_config['dataset']+'_A_I')
+                                     y_train, train_mask, stored_A = stored_A+'_A_I')
         y = np.sum(train_mask)
         label_per_sample, sample2label = Model11(y, y_train, train_mask)
     elif model_config['Model'] == 16:
@@ -144,20 +144,20 @@ def train(model_config, sess, seed, data_split = None):
               sep='\n')
     elif model_config['Model'] == 17:
         alpha = 1e-6
-        stored_A = model_config['dataset'] + '_A_I'
+        stored_A = stored_A + '_A_I'
         if model_config['drop_inter_class_edge']:
             stored_A = None
         test_acc, test_acc_of_class, prediction = Model17(adj, alpha, y_train, train_mask, y_test,
                                                           stored_A=stored_A)
         print("Test set results: accuracy= {:.5f}".format(test_acc))
         print("accuracy of each class=", test_acc_of_class)
-        return test_acc, test_acc_of_class, prediction
+        return test_acc, test_acc_of_class, prediction, size_of_each_class, time.time()-very_begining
     elif model_config['Model'] == 18:
         y_train, train_mask = Model9(adj, model_config['t'], model_config['alpha'],
-                                 y_train, train_mask, stored_A=model_config['dataset'] + '_A_I')
+                                 y_train, train_mask, stored_A=stored_A + '_A_I')
         alpha = 1e-6
         test_acc, test_acc_of_class, prediction = Model17(adj, alpha, y_train, train_mask, y_test,
-                                                          stored_A=model_config['dataset'] + '_A_I')
+                                                          stored_A=stored_A + '_A_I')
         print("Test set results: accuracy= {:.5f}".format(test_acc))
         print("accuracy of each class=", test_acc_of_class)
         return test_acc, test_acc_of_class, prediction
@@ -167,7 +167,7 @@ def train(model_config, sess, seed, data_split = None):
                     intra_op_parallelism_threads=model_config['threads'])) as sub_sess:
                 tf.set_random_seed(seed)
                 test_acc, test_acc_of_class, prediction = train(model_config['Model_to_add_label'], sub_sess, seed, data_split=data_split)
-        stored_A = model_config['dataset'] + '_A_I'
+        stored_A = stored_A + '_A_I'
         # print(time.time()-very_begining)
         y_train, train_mask = Model19(prediction, model_config['t'], y_train, train_mask, adj, model_config['alpha'], stored_A, model_config['Model19'])
         # print(time.time()-very_begining)
@@ -187,11 +187,15 @@ def train(model_config, sess, seed, data_split = None):
         pass
     elif model_config['Model'] == 22:
         alpha = model_config['alpha']
-        stored_A = model_config['dataset'] + '_A_I'
+        stored_A = stored_A + '_A_I'
         features = Model22(adj, features, alpha, stored_A)
     elif model_config['Model'] == 23:
-        clf = tree.DecisionTreeClassifier(max_depth=model_config['tree_depth'])
-        # clf = svm.SVC(kernel='rbf', gamma=model_config['gamma'], class_weight='balanced', degree=model_config['svm_degree'])
+        if model_config['classifier'] == 'tree':
+            clf = tree.DecisionTreeClassifier(max_depth=model_config['tree_depth'])
+        elif model_config['classifier'] == 'svm':
+            clf = svm.SVC(kernel='rbf', gamma=model_config['gamma'], class_weight='balanced', degree=model_config['svm_degree'])
+        else:
+            raise ValueError("model_config['classifier'] should be in ['svm', 'tree']")
         clf.fit(features[train_mask], np.argmax(y_train[train_mask], axis=1))
         prediction = clf.predict(features[test_mask])
         test_acc = np.sum(prediction == np.argmax(y_test[test_mask], axis=1))/np.sum(test_mask)
@@ -204,14 +208,26 @@ def train(model_config, sess, seed, data_split = None):
         return test_acc, test_acc_of_class, prediction
     elif model_config['Model'] == 26:
         adj = Model26(adj, model_config['t'], model_config['alpha'],
-                                     y_train, train_mask, stored_A = model_config['dataset']+'_A_I')
+                                     y_train, train_mask, stored_A = stored_A+'_A_I')
+    elif model_config['Model'] == 28:
+        features = Model28(adj, features, stored_A, model_config['k'])
     else:
         raise ValueError(
             '''model_config['Model'] must be in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,'''
             ''' 11, 12, 13, 14, 15, 16, 17, 18], but is {} now'''.format(model_config['Model']))
 
     # Some preprocessing
-    features = sparse_to_tuple(features)
+    if sparse.issparse(features):
+        if model_config['connection'] == ['f' for i in range(len(model_config['connection']))]:
+            train_features = sparse_to_tuple(features[train_mask])
+            val_features = sparse_to_tuple(features[val_mask])
+            test_features = sparse_to_tuple(features[test_mask])
+        features = sparse_to_tuple(features)
+    else:
+        train_features = features[train_mask]
+        val_features = features[val_mask]
+        test_features = features[test_mask]
+
     if model_config['Model'] == 12:
         if model_config['k'] < 0:
             if hasattr(model_config['train_size'], '__getitem__'):
@@ -232,7 +248,7 @@ def train(model_config, sess, seed, data_split = None):
         support = [sparse_to_tuple(taubin_smoothor(adj, model_config['taubin_lambda'], model_config['taubin_mu'], model_config['taubin_repeat']))]
         num_supports = 1
     elif model_config['conv'] == 'test21':
-        support = [sparse_to_tuple(Test21(adj, model_config['alpha'], beta=model_config['beta'], stored_A=model_config['dataset'] + '_A_I'))]
+        support = [sparse_to_tuple(Test21(adj, model_config['alpha'], beta=model_config['beta'], stored_A=stored_A + '_A_I'))]
         num_supports = 1
     elif model_config['conv'] == 'gcn':
         # origin_adj_support = [preprocess_adj(origin_adj)]
@@ -251,7 +267,7 @@ def train(model_config, sess, seed, data_split = None):
     # Define placeholders
     placeholders = {
         'support': [tf.sparse_placeholder(tf.float32, name='support' + str(i)) for i in range(num_supports)],
-        'features': tf.sparse_placeholder(tf.float32, name='features'),
+        'features': tf.sparse_placeholder(tf.float32, name='features') if isinstance(features, tf.SparseTensorValue) else tf.placeholder(tf.float32, shape=[None, features.shape[1]], name='features'),
         'labels': tf.placeholder(tf.int32, name='labels', shape=(None, y_train.shape[1])),
         'labels_mask': tf.placeholder(tf.int32, name='labels_mask'),
         'dropout': tf.placeholder_with_default(0., name='dropout', shape=()),
@@ -303,10 +319,23 @@ def train(model_config, sess, seed, data_split = None):
     # projector.visualize_embeddings(train_writer, projector_config)
 
     # Construct feed dictionary
-    train_feed_dict = construct_feed_dict(features, support, y_train, train_mask, triplet, placeholders)
-    train_feed_dict.update({placeholders['dropout']: model_config['dropout']})
-    valid_feed_dict = construct_feed_dict(features, support, y_val, val_mask, triplet, placeholders)
-    test_feed_dict = construct_feed_dict(features, support, y_test, test_mask, triplet, placeholders)
+    if model_config['connection'] == ['f' for i in range(len(model_config['connection']))]:
+        train_feed_dict = construct_feed_dict(
+            train_features, support,
+            y_train[train_mask], np.ones(train_mask.sum(), dtype=np.bool), triplet, placeholders)
+        train_feed_dict.update({placeholders['dropout']: model_config['dropout']})
+        valid_feed_dict = construct_feed_dict(
+            val_features, support,
+            y_val[val_mask], np.ones(val_mask.sum(), dtype=np.bool), triplet, placeholders)
+        test_feed_dict = construct_feed_dict(
+            test_features, support,
+            y_test[test_mask], np.ones(test_mask.sum(), dtype=np.bool), triplet, placeholders)
+    else:
+        train_feed_dict = construct_feed_dict(features, support, y_train, train_mask, triplet, placeholders)
+        train_feed_dict.update({placeholders['dropout']: model_config['dropout']})
+        valid_feed_dict = construct_feed_dict(features, support, y_val, val_mask, triplet, placeholders)
+        test_feed_dict = construct_feed_dict(features, support, y_test, test_mask, triplet, placeholders)
+
     if model_config['Model'] in [11, 13, 14, 15]:
         train_feed_dict.update({placeholders['label_per_sample']: label_per_sample})
         train_feed_dict.update({placeholders['sample2label']: sample2label})
@@ -329,12 +358,13 @@ def train(model_config, sess, seed, data_split = None):
     # test_cost_without_valid, test_acc_without_valid = sess.run([model.loss, model.accuracy], feed_dict=test_feed_dict)
     # test_duration_without_valid = time.time() - t_test
 
+    print(time.time() - very_begining)
     if model_config['train']:
         # Train model
         print('training...')
         for step in range(model_config['epochs']):
             if model_config['Model']in [20, 21] and step == model_config['epochs']/2:
-                stored_A = model_config['dataset'] + '_A_I'
+                stored_A = stored_A + '_A_I'
                 y_train, train_mask = Model20(prediction, model_config['t'], y_train, train_mask, adj,
                                               model_config['alpha'], stored_A)
                 if model_config['Model'] == 21:
@@ -384,6 +414,8 @@ def train(model_config, sess, seed, data_split = None):
                         feed_dict=test_feed_dict)
                     test_duration = time.time() - t_test
                     prediction = sess.run(model.prediction,train_feed_dict)
+                    if args.verbose:
+                        print('*', end='')
             else:
                 if train_acc >= max_train_acc:
                     max_train_acc = train_acc
@@ -393,6 +425,8 @@ def train(model_config, sess, seed, data_split = None):
                         feed_dict=test_feed_dict)
                     test_duration = time.time() - t_test
                     prediction = sess.run(model.prediction,train_feed_dict)
+                    if args.verbose:
+                        print('*', end='')
 
             # Print results
             if args.verbose:

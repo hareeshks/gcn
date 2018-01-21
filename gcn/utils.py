@@ -101,134 +101,133 @@ def get_triplet(y_train, train_mask, max_triplets):
 
 def load_data(dataset_str, train_size, validation_size, model_config):
     """Load data."""
-    # if dataset_str in ['USPS-Fea', 'CIFAR-Fea', 'Cifar_10000_fea', 'Cifar_R10000_fea']:
-    #     data = sio.loadmat('data/{}.mat'.format(dataset_str))
-    #     labels = data['labels']
-    #     labels = np.zeros([data['labels'].shape[0],np.max(data['labels'])+1])
-    #     labels[np.arange(data['labels'].shape[0]),data['labels'].astype(np.int16).flatten()] = 1
-    #     features = sp.lil_matrix(data['X']+1)
-    #     adj = data['G']
+    if dataset_str in ['USPS-Fea', 'CIFAR-Fea', 'Cifar_10000_fea', 'Cifar_R10000_fea']:
+        data = sio.loadmat('data/{}.mat'.format(dataset_str))
+        labels = data['labels']
+        labels = np.zeros([data['labels'].shape[0],np.max(data['labels'])+1])
+        labels[np.arange(data['labels'].shape[0]),data['labels'].astype(np.int16).flatten()] = 1
+        features = data['X']
+        adj = data['G']
+    else:
+        names = ['x', 'y', 'tx', 'ty', 'allx', 'ally', 'graph']
+        objects = []
+        for i in range(len(names)):
+            with open("data/ind.{}.{}".format(dataset_str, names[i]), 'rb') as f:
+                if sys.version_info > (3, 0):
+                    objects.append(pkl.load(f, encoding='latin1'))
+                else:
+                    objects.append(pkl.load(f))
 
-    names = ['x', 'y', 'tx', 'ty', 'allx', 'ally', 'graph']
-    objects = []
-    for i in range(len(names)):
-        with open("data/ind.{}.{}".format(dataset_str, names[i]), 'rb') as f:
-            if sys.version_info > (3, 0):
-                objects.append(pkl.load(f, encoding='latin1'))
-            else:
-                objects.append(pkl.load(f))
+        x, y, tx, ty, allx, ally, graph = tuple(objects)
+        adj = nx.adjacency_matrix(nx.from_dict_of_lists(graph))
+        test_idx_reorder = parse_index_file("data/ind.{}.test.index".format(dataset_str))
+        test_idx_range = np.sort(test_idx_reorder)
 
-    x, y, tx, ty, allx, ally, graph = tuple(objects)
-    adj = nx.adjacency_matrix(nx.from_dict_of_lists(graph))
-    test_idx_reorder = parse_index_file("data/ind.{}.test.index".format(dataset_str))
-    test_idx_range = np.sort(test_idx_reorder)
-
-    if dataset_str == 'citeseer':
-        # Fix citeseer dataset (there are some isolated nodes in the graph)
-        # Find isolated nodes, add them as zero-vecs into the right position
-        test_idx_range_full = range(min(test_idx_reorder), max(test_idx_reorder) + 1)
-        tx_extended = sp.lil_matrix((len(test_idx_range_full), x.shape[1]))
-        tx_extended[test_idx_range - min(test_idx_range), :] = tx
-        tx = tx_extended
-        ty_extended = np.zeros((len(test_idx_range_full), y.shape[1]))
-        ty_extended[test_idx_range - min(test_idx_range), :] = ty
-        ty = ty_extended
-
-    features = sp.vstack((allx, tx)).tolil()
-    # features = sp.eye(features.shape[0]).tolil()
-    # features = sp.lil_matrix(allx)
-
-    labels = np.vstack((ally, ty))
-    # labels = np.vstack(ally)
-
-    if dataset_str.startswith('nell'):
-        # Find relation nodes, add them as zero-vecs into the right position
-        test_idx_range_full = range(allx.shape[0], len(graph))
-        isolated_node_idx = np.setdiff1d(test_idx_range_full, test_idx_reorder)
-        tx_extended = sp.lil_matrix((len(test_idx_range_full), x.shape[1]))
-        tx_extended[test_idx_range - allx.shape[0], :] = tx
-        tx = tx_extended
-        ty_extended = np.zeros((len(test_idx_range_full), y.shape[1]))
-        ty_extended[test_idx_range - allx.shape[0], :] = ty
-        ty = ty_extended
+        if dataset_str == 'citeseer':
+            # Fix citeseer dataset (there are some isolated nodes in the graph)
+            # Find isolated nodes, add them as zero-vecs into the right position
+            test_idx_range_full = range(min(test_idx_reorder), max(test_idx_reorder) + 1)
+            tx_extended = sp.lil_matrix((len(test_idx_range_full), x.shape[1]))
+            tx_extended[test_idx_range - min(test_idx_range), :] = tx
+            tx = tx_extended
+            ty_extended = np.zeros((len(test_idx_range_full), y.shape[1]))
+            ty_extended[test_idx_range - min(test_idx_range), :] = ty
+            ty = ty_extended
 
         features = sp.vstack((allx, tx)).tolil()
-        features[test_idx_reorder, :] = features[test_idx_range, :]
+        # features = sp.eye(features.shape[0]).tolil()
+        # features = sp.lil_matrix(allx)
+
         labels = np.vstack((ally, ty))
+        # labels = np.vstack(ally)
+
+        if dataset_str.startswith('nell'):
+            # Find relation nodes, add them as zero-vecs into the right position
+            test_idx_range_full = range(allx.shape[0], len(graph))
+            isolated_node_idx = np.setdiff1d(test_idx_range_full, test_idx_reorder)
+            tx_extended = sp.lil_matrix((len(test_idx_range_full), x.shape[1]))
+            tx_extended[test_idx_range - allx.shape[0], :] = tx
+            tx = tx_extended
+            ty_extended = np.zeros((len(test_idx_range_full), y.shape[1]))
+            ty_extended[test_idx_range - allx.shape[0], :] = ty
+            ty = ty_extended
+
+            features = sp.vstack((allx, tx)).tolil()
+            features[test_idx_reorder, :] = features[test_idx_range, :]
+            labels = np.vstack((ally, ty))
+            labels[test_idx_reorder, :] = labels[test_idx_range, :]
+
+            idx_all = np.setdiff1d(range(len(graph)), isolated_node_idx)
+
+            if not os.path.isfile("data/planetoid/{}.features.npz".format(dataset_str)):
+                print("Creating feature vectors for relations - this might take a while...")
+                features_extended = sp.hstack((features, sp.lil_matrix((features.shape[0], len(isolated_node_idx)))),
+                                              dtype=np.int32).todense()
+                features_extended[isolated_node_idx, features.shape[1]:] = np.eye(len(isolated_node_idx))
+                features = sp.csr_matrix(features_extended, dtype=np.float32)
+                print("Done!")
+                save_sparse_csr("data/planetoid/{}.features".format(dataset_str), features)
+            else:
+                features = load_sparse_csr("data/planetoid/{}.features.npz".format(dataset_str))
+
+            adj = nx.adjacency_matrix(nx.from_dict_of_lists(graph))
+        features[test_idx_reorder, :] = features[test_idx_range, :]
         labels[test_idx_reorder, :] = labels[test_idx_range, :]
-
-        idx_all = np.setdiff1d(range(len(graph)), isolated_node_idx)
-
-        if not os.path.isfile("data/planetoid/{}.features.npz".format(dataset_str)):
-            print("Creating feature vectors for relations - this might take a while...")
-            features_extended = sp.hstack((features, sp.lil_matrix((features.shape[0], len(isolated_node_idx)))),
-                                          dtype=np.int32).todense()
-            features_extended[isolated_node_idx, features.shape[1]:] = np.eye(len(isolated_node_idx))
-            features = sp.csr_matrix(features_extended, dtype=np.float32)
-            print("Done!")
-            save_sparse_csr("data/planetoid/{}.features".format(dataset_str), features)
-        else:
-            features = load_sparse_csr("data/planetoid/{}.features.npz".format(dataset_str))
-
-        adj = nx.adjacency_matrix(nx.from_dict_of_lists(graph))
 
     global all_labels
     all_labels = labels.copy()
 
-    if dataset_str in ['cora', 'citeseer', 'pubmed']:
-        features[test_idx_reorder, :] = features[test_idx_range, :]
-        labels[test_idx_reorder, :] = labels[test_idx_range, :]
-        # split the data set
-        idx = np.arange(len(labels))
-        no_class = labels.shape[1]  # number of class
-        validation_size = validation_size * len(idx) // 100
-        if hasattr(train_size, '__getitem__'):
-            np.random.shuffle(idx)
-            idx_train = []
-            count = [0 for i in range(no_class)]
-            label_each_class = train_size
-            for i in idx:
-                for j in range(no_class):
-                    if labels[i, j] and count[j] < label_each_class[j]:
-                        idx_train.append(i)
-                        count[j] += 1
-        else:
-            labels_of_class = [0]
-            while (np.prod(labels_of_class) == 0):
-                np.random.shuffle(idx)
-                idx_train = idx[0:int(len(idx) * train_size // 100)]
-                labels_of_class = np.sum(labels[idx_train], axis=0)
-        print('labels of each class : ', np.sum(labels[idx_train], axis=0))
-        idx_val = idx[-500 - validation_size:-500]
-        idx_test = idx[-500:]
-        # idx_val = idx[len(idx) * train_size // 100:len(idx) * (train_size // 2 + 50) // 100]
-        # idx_test = idx[len(idx) * (train_size // 2 + 50) // 100:len(idx)]
-
-        train_mask = sample_mask(idx_train, labels.shape[0])
-        val_mask = sample_mask(idx_val, labels.shape[0])
-        test_mask = sample_mask(idx_test, labels.shape[0])
-
-        y_train = np.zeros(labels.shape)
-        y_val = np.zeros(labels.shape)
-        y_test = np.zeros(labels.shape)
-        y_train[train_mask, :] = labels[train_mask, :]
-        y_val[val_mask, :] = labels[val_mask, :]
-        y_test[test_mask, :] = labels[test_mask, :]
+    # split the data set
+    idx = np.arange(len(labels))
+    no_class = labels.shape[1]  # number of class
+    validation_size = validation_size * len(idx) // 100
+    if hasattr(train_size, '__getitem__'):
+        np.random.shuffle(idx)
+        idx_train = []
+        count = [0 for i in range(no_class)]
+        label_each_class = train_size
+        for i in idx:
+            for j in range(no_class):
+                if labels[i, j] and count[j] < label_each_class[j]:
+                    idx_train.append(i)
+                    count[j] += 1
     else:
-        idx_test = test_idx_range.tolist()
-        idx_train = range(len(y))
-        idx_val = range(len(y), len(y) + 500)
+        labels_of_class = [0]
+        while (np.prod(labels_of_class) == 0):
+            np.random.shuffle(idx)
+            idx_train = idx[0:int(len(idx) * train_size // 100)]
+            labels_of_class = np.sum(labels[idx_train], axis=0)
+    print('labels of each class : ', np.sum(labels[idx_train], axis=0))
+    idx_val = idx[-500 - validation_size:-500]
+    idx_test = idx[-500:]
+    # idx_val = idx[len(idx) * train_size // 100:len(idx) * (train_size // 2 + 50) // 100]
+    # idx_test = idx[len(idx) * (train_size // 2 + 50) // 100:len(idx)]
 
-        train_mask = sample_mask(idx_train, labels.shape[0])
-        val_mask = sample_mask(idx_val, labels.shape[0])
-        test_mask = sample_mask(idx_test, labels.shape[0])
+    train_mask = sample_mask(idx_train, labels.shape[0])
+    val_mask = sample_mask(idx_val, labels.shape[0])
+    test_mask = sample_mask(idx_test, labels.shape[0])
 
-        y_train = np.zeros(labels.shape)
-        y_val = np.zeros(labels.shape)
-        y_test = np.zeros(labels.shape)
-        y_train[train_mask, :] = labels[train_mask, :]
-        y_val[val_mask, :] = labels[val_mask, :]
-        y_test[test_mask, :] = labels[test_mask, :]
+    y_train = np.zeros(labels.shape)
+    y_val = np.zeros(labels.shape)
+    y_test = np.zeros(labels.shape)
+    y_train[train_mask, :] = labels[train_mask, :]
+    y_val[val_mask, :] = labels[val_mask, :]
+    y_test[test_mask, :] = labels[test_mask, :]
+    # else:
+    #     idx_test = test_idx_range.tolist()
+    #     idx_train = range(len(y))
+    #     idx_val = range(len(y), len(y) + 500)
+    #
+    #     train_mask = sample_mask(idx_train, labels.shape[0])
+    #     val_mask = sample_mask(idx_val, labels.shape[0])
+    #     test_mask = sample_mask(idx_test, labels.shape[0])
+    #
+    #     y_train = np.zeros(labels.shape)
+    #     y_val = np.zeros(labels.shape)
+    #     y_test = np.zeros(labels.shape)
+    #     y_train[train_mask, :] = labels[train_mask, :]
+    #     y_val[val_mask, :] = labels[val_mask, :]
+    #     y_test[test_mask, :] = labels[test_mask, :]
 
     size_of_each_class = np.sum(labels[idx_train], axis=0)
     if model_config['loss_func'] == 'triplet':
@@ -823,6 +822,7 @@ def Model17(adj, alpha, y_train, train_mask, y_test, stored_A=None):
 
     # nearest clssifier
     predicted_labels = np.argmax(P, axis=1)
+    # prediction = alpha*P
     prediction = np.zeros(P.shape)
     prediction[np.arange(P.shape[0]), predicted_labels] = 1
 
@@ -945,10 +945,9 @@ def Model20(prediction, t, y_train, train_mask, W, alpha, stored_A):
     return y_train, train_mask
 
 
-def smooth(features, adj, smoothing, model_config):
+def smooth(features, adj, smoothing, model_config, stored_A=None):
     alpha = model_config['alpha']
     beta = model_config['beta']
-    stored_A = model_config['dataset'] + '_A_I'
 
     if smoothing is None:
         return features
@@ -981,6 +980,10 @@ def smooth(features, adj, smoothing, model_config):
     elif smoothing == 'test21':
         smoothor = Test21(adj, alpha, beta, stored_A)
         return sp.csr_matrix(smoothor * features)
+    elif smoothing == 'test21_norm':
+        smoothor = Test21(adj, alpha, beta, stored_A)
+        features = sp.csr_matrix(smoothor * features)
+        return normalize(features, norm='l1', axis=1, copy=False)
     elif smoothing == 'test27':
         return Test27(adj, features, alpha, beta, stored_A)
     else:
@@ -989,14 +992,33 @@ def smooth(features, adj, smoothing, model_config):
 
 def Model22(adj, features, alpha, stored_A=None):
     P = absorption_probability(adj + sp.eye(adj.shape[0]), alpha, stored_A=stored_A)
-    return sp.csr_matrix(P * alpha * features)
+    return sp.csr_matrix(alpha * P.dot(features))
 
 
 def Test21(adj, alpha, beta, stored_A=None):
     P = absorption_probability(adj + sp.eye(adj.shape[0]), alpha, stored_A=stored_A)
-    P = (P > (beta / alpha)).astype(np.float32)
+    P *= alpha
+    # P = (P > (beta / alpha)).astype(np.float32)
+    lines = np.min([100, P.shape[0]])
+    idx = np.arange(P.shape[0])
+    np.random.shuffle(idx)
+    idx = idx[:lines]
+    P_flat = P[idx].flat
+    P_index = np.argsort(P_flat)
+    # P_acc = np.add.accumulate(P_flat[P_index])/lines
+    # num = np.sum(P_acc <= (1-beta))
+    # gate = P_flat[P_index[np.maximum(num-1, 0)]]
+    num = beta*lines
+    gate = P_flat[P_index[len(P_index)-num]]
+    P = (P > [gate]).astype(np.float32)
+
+    global all_labels
+    c = np.argmax(all_labels, axis=1)
+    c = c == np.expand_dims(c, 1)
+    num = np.sum(P)
+    print("neighbor accuracy = ", np.sum(c*P)/num,'average #neighbors = ', num/P.shape[0])
     # normalize(P, norm='l1', axis=1, copy=False)
-    return sp.csr_matrix(P * alpha)
+    return sp.csr_matrix(P)
 
 def Test27(adj, features, alpha, beta, stored_A=None):
     P = absorption_probability(adj + sp.eye(adj.shape[0]), alpha, stored_A=stored_A)
@@ -1214,17 +1236,23 @@ def preprocess_model_config(model_config):
             model_name += '_' + 'ap_smoothing' + str(model_config['alpha'])
         elif model_config['smoothing'] == 'test21':
             model_name += '_' + 'test21' + '_' + str(model_config['alpha']) + '_' + str(model_config['beta'])
+        elif model_config['smoothing'] == 'test21_norm':
+            model_name += '_' + 'test21_norm' + '_' + str(model_config['alpha']) + '_' + str(model_config['beta'])
         elif model_config['smoothing'] == 'test27':
             model_name += '_' + 'test27' + '_' + str(model_config['alpha']) + '_' + str(model_config['beta'])
         elif model_config['smoothing'] == 'poly':
             model_name += '_' + 'poly_smoothing'
             for a in model_config['poly_parameters']:
                 model_name += '_' + str(a)
+        elif model_config['smoothing'] == 'taubin':
+            model_name += '_taubin' + str(model_config['taubin_lambda']) \
+                          + '_' + str(model_config['taubin_mu']) \
+                          + '_' + str(model_config['taubin_repeat'])
 
         if model_config['conv'] == 'cheby':
             model_name += '_cheby' + str(model_config['max_degree'])
         if model_config['conv'] == 'taubin':
-            model_name += '_taubin' + str(model_config['taubin_lambda']) \
+            model_name += '_conv_taubin' + str(model_config['taubin_lambda']) \
                           + '_' + str(model_config['taubin_mu']) \
                           + '_' + str(model_config['taubin_repeat'])
         if model_config['conv'] == 'test21':

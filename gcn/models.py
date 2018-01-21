@@ -49,7 +49,7 @@ class GCN_MLP(object):
         layer_size = copy(self.model_config['layer_size'])
         layer_size.insert(0, self.input_dim)
         layer_size.append(self.output_dim)
-        sparse = True
+        sparse = isinstance(self.placeholders['features'], tf.SparseTensor)
         with tf.name_scope(self.name):
             self.global_step = tf.Variable(0, name='global_step', trainable=False)
             self.activations.append(self.inputs)

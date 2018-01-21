@@ -22,7 +22,7 @@ import pprint
 #           'Model19' : 'union',        # 'union' | 'intersection'
 # 22 LP with features
 # validate: (True | False) Whether use validation set
-# 23 svm
+# 23 other classifier
 # 24 Test21
 # 25 Test22
 # 26 Model9 with extra edges
@@ -34,11 +34,11 @@ configuration ={
 
     # The default model configuration
     'default':{
-        'dataset'           : 'cora',     # 'Dataset string. (cora | citeseer | pubmed | CIFAR-Fea | USPS-Fea)'
-        'train_size'        : 1,         # if train_size is a number, then use TRAIN_SIZE%% labels.
-        # 'train_size'        : [20, 20, 20, 20, 20, 20, 20], # if train_size is a list of numbers, then it specifies training lables for each class.
+        'dataset'           : 'USPS-Fea',     # 'Dataset string. (cora | citeseer | pubmed | CIFAR-Fea | USPS-Fea)'
+        'train_size'        : 0.21,         # if train_size is a number, then use TRAIN_SIZE%% labels.
+        # 'train_size'        : [2 for i in range(10)], # if train_size is a list of numbers, then it specifies training lables for each class.
         'validation_size'   : 20,           # 'Use VALIDATION_SIZE% data to train model'
-        'validate'          : False,        # Whether use validation set
+        'validate'          : True,        # Whether use validation set
         'conv'              : 'gcn',        # 'conv type. (gcn | cheby | chebytheta | gcn_rw | taubin | test21)'
         'max_degree'        : 2,            # 'Maximum Chebyshev polynomial degree.'
         'learning_rate'     : 0.02,         # 'Initial learning rate.'
@@ -89,7 +89,7 @@ configuration ={
         'random_seed'       : int(time.time()),     #'Random seed.'
         'feature'           : 'bow',        # 'bow' | 'tfidf' | 'none'.
 
-        'smoothing'         : None,        # 'poly'| 'ap'  | 'taubin' | 'test21' | None
+        'smoothing'         : None,        # 'poly'| 'ap'  | 'taubin' | 'test21' | 'test21_norm' | None
         'alpha'             : 1e-6,         # 'alpha' in the construction of  absorption probability
         'beta'              : 0.05,
         'poly_parameters'   : [1,-2,1],           # coefficients of p(L_rw)
@@ -118,67 +118,103 @@ configuration ={
     # Only configurations that's different with default are specified here
     'model_list':
     [
-        # gcn
+        # # smoothing by test21
+        # {
+        #     'Model' : 0,
+        #     'smoothing'         :'test21',
+        #     'alpha'             : 0.3,
+        #     'beta'              : 0.001,
+        #     'connection'        : 'ff',
+        #     'conv'              : 'gcn',
+        #     'layer_size': [256],
+        # },
+        # # gcn
+        # {
+        #     'Model' : 0,
+        #     'layer_size': [256],
+        #     'drop_inter_class_edge' : True,
+        # },
+        # lp
         {
-            'Model' : 0,
-            'smoothing'         :  'taubin',
-            'connection'        : 'ff',
-            'taubin_lambda'     : 1,
-            'taubin_mu'         : 0,
-            'taubin_repeat'     : 2,
-        }
-    ] +
-    # [
-    #     # gcn
-    #     {
-    #         'Model' : 0,
-    #         'smoothing'         :  None,
-    #         'connection'        : 'cc',
-    #         'conv'              : 'taubin',
-    #         'taubin_lambda'     : 1,
-    #         'taubin_mu'         : 0,
-    #         'taubin_repeat'     : repeat,
-    #     } for repeat in [2,3,4,5]
-    # ] +
-    [
-        {
-            'Model' : 0,
-            'connection'        : 'cc',
-            'conv'              : 'gcn',
-        }
-    ] +
-    # [
-    #     # gcn
-    #     {
-    #         'Model' : 28,
-    #         'smoothing'         :  None,
-    #         'connection'        : 'ff',
-    #         'conv'              : 'gcn',
-    #         'k'                 : k
-    #     } for k in [150, 200, 300]
-    # ]
-    # +
-    [
-        # only one convolutional layer
-        {
-            'Model': 0,
-            'connection': 'cf',
-            'conv': 'test21',
-            'alpha': 0.3,
-            'beta': 0.001,
+            'Model' : 17,
+            'alpha' : 1e-6,
         },
+        # ff
+        # {
+        #     'Model' : 0,
+        #     'connection' : 'ff',
+        #     'layer_size': [256],
+        #     'learning_rate'     : 0.1,
+        # },
     ] +
     [
         # smoothing by test21
         {
             'Model' : 0,
             'smoothing'         :'test21',
-            'alpha'             : 0.3,
-            'beta'              : 0.001,
+            'alpha'             : alpha,
+            'beta'              : beta,
             'connection'        : 'ff',
             'conv'              : 'gcn',
-        },
+            'layer_size': [256],
+        } for beta in [500, 700, 900, 1100] for alpha in [1e-8, 1e-6, 1e-4, 1e-2, 0.3]
     ]
+    # [
+    #     # gcn_taubin
+    #     {
+    #         'Model' : 0,
+    #         'smoothing'         :  'taubin',
+    #         'connection'        : 'ff',
+    #         'taubin_lambda'     : 1,
+    #         'taubin_mu'         : 0,
+    #         'taubin_repeat'     : repeat,
+    #     } for repeat in [3,4,5]
+    # ] +
+    # # [
+    # #     # Ideal low-pass filter
+    # #     {
+    # #         'Model' : 28,
+    # #         'smoothing'         :  None,
+    # #         'connection'        : 'ff',
+    # #         'conv'              : 'gcn',
+    # #         'k'                 : k
+    # #     } for k in [150, 200, 300]
+    # # ]
+    # # +
+    # # [
+    # #     # only one convolutional layer
+    # #     {
+    # #         'Model': 0,
+    # #         'connection': 'cf',
+    # #         'conv': 'test21',
+    # #         'alpha': 0.3,
+    # #         'beta': 0.001,
+    # #     },
+    # # ] +
+    # [
+    #     # smoothing by test21
+    #     {
+    #         'Model' : 0,
+    #         'smoothing'         :'test21',
+    #         'alpha'             : alpha,
+    #         'beta'              : beta,
+    #         'connection'        : 'ff',
+    #         'conv'              : 'gcn',
+    #         'layer_size': [256],
+    #     } for alpha in [0.1, 0.3, 1] for beta in [0.0009, 0.001, 0.0015]
+    # ]+
+    # [
+    #     # smoothing by test21
+    #     {
+    #         'Model' : 0,
+    #         'smoothing'         :'test21_norm',
+    #         'alpha'             : alpha,
+    #         'beta'              : beta,
+    #         'connection'        : 'ff',
+    #         'conv'              : 'gcn',
+    #         'layer_size': [256],
+    #     } for alpha in [0.1, 0.3, 1] for beta in [0.0009, 0.001, 0.0015]
+    # ]
 }
 
 # Parse args
@@ -187,7 +223,7 @@ parser = argparse.ArgumentParser(description=(
     "Most configuration are specified in config.py, please read it and modify it as you want."))
 parser.add_argument("-v", "--verbose", action="store_true")
 parser.add_argument("--dataset", type=str)
-parser.add_argument("--train_size", type=float)
+parser.add_argument("--train_size", type=str)
 parser.add_argument("--repeating", type=int)
 parser.add_argument("--validate", type=bool, help='0 | 1')
 parser.add_argument("--loss_func", type=str)
@@ -198,7 +234,7 @@ print(args)
 if args.dataset is not None:
     configuration['default']['dataset'] = args.dataset
 if args.train_size is not None:
-    configuration['default']['train_size'] = args.train_size
+    configuration['default']['train_size'] = eval(args.train_size)
 if args.repeating is not None:
     configuration['repeating']=args.repeating
 if args.validate is not None:
