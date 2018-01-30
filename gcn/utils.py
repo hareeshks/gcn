@@ -101,11 +101,11 @@ def get_triplet(y_train, train_mask, max_triplets):
 
 def load_data(dataset_str, train_size, validation_size, model_config):
     """Load data."""
-    if dataset_str in ['USPS-Fea', 'CIFAR-Fea', 'Cifar_10000_fea', 'Cifar_R10000_fea']:
+    if dataset_str in ['USPS-Fea', 'CIFAR-Fea', 'Cifar_10000_fea', 'Cifar_R10000_fea', 'MNIST-Fea', 'MNIST-10000', 'MNIST-5000']:
         data = sio.loadmat('data/{}.mat'.format(dataset_str))
-        labels = data['labels']
-        labels = np.zeros([data['labels'].shape[0],np.max(data['labels'])+1])
-        labels[np.arange(data['labels'].shape[0]),data['labels'].astype(np.int16).flatten()] = 1
+        l = data['labels'].flatten()
+        labels = np.zeros([l.shape[0],np.max(data['labels'])+1])
+        labels[np.arange(l.shape[0]), l.astype(np.int8)] = 1
         features = data['X']
         adj = data['G']
     else:
@@ -186,20 +186,26 @@ def load_data(dataset_str, train_size, validation_size, model_config):
         idx_train = []
         count = [0 for i in range(no_class)]
         label_each_class = train_size
+        next = 0
         for i in idx:
+            if count == label_each_class:
+                break
+            next += 1
             for j in range(no_class):
                 if labels[i, j] and count[j] < label_each_class[j]:
                     idx_train.append(i)
                     count[j] += 1
+        idx_val = idx[next:next+500]
+        idx_test = idx[next+500:]
     else:
         labels_of_class = [0]
         while (np.prod(labels_of_class) == 0):
             np.random.shuffle(idx)
             idx_train = idx[0:int(len(idx) * train_size // 100)]
             labels_of_class = np.sum(labels[idx_train], axis=0)
+        idx_val = idx[-500 - validation_size:-500]
+        idx_test = idx[-500:]
     print('labels of each class : ', np.sum(labels[idx_train], axis=0))
-    idx_val = idx[-500 - validation_size:-500]
-    idx_test = idx[-500:]
     # idx_val = idx[len(idx) * train_size // 100:len(idx) * (train_size // 2 + 50) // 100]
     # idx_test = idx[len(idx) * (train_size // 2 + 50) // 100:len(idx)]
 
@@ -592,15 +598,15 @@ def Model8(W, s, alpha, y_train, train_mask):
 
 def absorption_probability(W, alpha, stored_A=None, column=None):
     try:
-        A = np.load(stored_A + str(alpha) + '.npy')
-        print('load A from ' + stored_A + str(alpha) + '.npy')
+        # raise Exception('DEBUG')
+        A = np.load(stored_A + str(alpha) + '.npz')['arr_0']
+        print('load A from ' + stored_A + str(alpha) + '.npz')
         if column is not None:
             P = np.zeros(W.shape)
             P[:, column] = A[:, column]
             return P
         else:
             return A
-            # raise Exception('DEBUG')
     except:
         # W=sp.csr_matrix([[0,1],[1,0]])
         # alpha = 1
@@ -608,23 +614,23 @@ def absorption_probability(W, alpha, stored_A=None, column=None):
         print('Calculate absorption probability...')
         W = W.copy().astype(np.float32)
         D = W.sum(1).flat
-        L = np.diag(D) - W
-        L += alpha * np.eye(W.shape[0], dtype=L.dtype)
+        L = sp.diags(D, dtype=np.float32) - W
+        L += alpha * sp.eye(W.shape[0], dtype=L.dtype)
+        L = sp.csc_matrix(L)
         # print(np.linalg.det(L))
 
         if column is not None:
-            L = sp.csr_matrix(L)
             A = np.zeros(W.shape)
             # start = time.time()
-            A[:, column] = slinalg.spsolve(L, np.eye(L.shape[0], dtype='float32')[:, column])
+            A[:, column] = slinalg.spsolve(L, sp.csc_matrix(np.eye(L.shape[0], dtype='float32')[:, column])).toarray()
             # print(time.time()-start)
             return A
         else:
             # start = time.time()
-            A = np.array(linalg.inv(L, overwrite_a=True))
+            A = slinalg.inv(L).toarray()
             # print(time.time()-start)
             if stored_A:
-                np.save(stored_A + str(alpha) + '.npy', A)
+                np.savez(stored_A + str(alpha) + '.npz', A)
             return A
             # fletcher_reeves
 
@@ -1005,9 +1011,11 @@ def Test21(adj, alpha, beta, stored_A=None):
     idx = idx[:lines]
     P_flat = P[idx].flat
     P_index = np.argsort(P_flat)
-    # P_acc = np.add.accumulate(P_flat[P_index])/lines
+    P_acc = np.add.accumulate(P_flat[P_index])/lines
+    percentage = 1-P_acc[-beta*lines]
     # num = np.sum(P_acc <= (1-beta))
     # gate = P_flat[P_index[np.maximum(num-1, 0)]]
+
     num = beta*lines
     gate = P_flat[P_index[len(P_index)-num]]
     P = (P > [gate]).astype(np.float32)
@@ -1016,7 +1024,7 @@ def Test21(adj, alpha, beta, stored_A=None):
     c = np.argmax(all_labels, axis=1)
     c = c == np.expand_dims(c, 1)
     num = np.sum(P)
-    print("neighbor accuracy = ", np.sum(c*P)/num,'average #neighbors = ', num/P.shape[0])
+    print("neighbor accuracy = ", np.sum(c*P)/num,'average #neighbors = ', num/P.shape[0], 'energy reserved=', percentage)
     # normalize(P, norm='l1', axis=1, copy=False)
     return sp.csr_matrix(P)
 

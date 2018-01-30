@@ -30,15 +30,15 @@ import pprint
 # 28 imitate spectral clustering
 configuration ={
     # repeating times
-    'repeating'             : 1,
+    'repeating'             : 3,
 
     # The default model configuration
     'default':{
-        'dataset'           : 'USPS-Fea',     # 'Dataset string. (cora | citeseer | pubmed | CIFAR-Fea | USPS-Fea)'
-        'train_size'        : 0.21,         # if train_size is a number, then use TRAIN_SIZE%% labels.
-        # 'train_size'        : [2 for i in range(10)], # if train_size is a list of numbers, then it specifies training lables for each class.
+        'dataset'           : 'MNIST-10000',     # 'Dataset string. (cora | citeseer | pubmed | CIFAR-Fea | Cifar_10000_fea | Cifar_R10000_fea | USPS-Fea | MNIST-Fea | MNIST-10000)'
+        # 'train_size'        : 1,         # if train_size is a number, then use TRAIN_SIZE%% labels.
+        'train_size'        : [20 for i in range(10)], # if train_size is a list of numbers, then it specifies training lables for each class.
         'validation_size'   : 20,           # 'Use VALIDATION_SIZE% data to train model'
-        'validate'          : True,        # Whether use validation set
+        'validate'          : False,        # Whether use validation set
         'conv'              : 'gcn',        # 'conv type. (gcn | cheby | chebytheta | gcn_rw | taubin | test21)'
         'max_degree'        : 2,            # 'Maximum Chebyshev polynomial degree.'
         'learning_rate'     : 0.02,         # 'Initial learning rate.'
@@ -79,7 +79,7 @@ configuration ={
         #     input_layer --convolution-> 7 nodes --convolution-> 8 nodes --dense-> output_layer
         #     (or say: input_layer -c-> 7 -c-> 8 -d-> output_layer)
 
-        'dropout'           : 0.5,          # 'Dropout rate (1 - keep probability).'
+        'dropout'           : 0.2,          # 'Dropout rate (1 - keep probability).'
         'weight_decay'      : 5e-4,         # 'Weight for L2 loss on embedding matrix.'
 
         'early_stopping'    : 0,
@@ -107,7 +107,7 @@ configuration ={
         # structure of the network
 
         'threads'           : 2*cpu_count(),  #'Number of threads'
-        'train'             : True,
+        'train'             : False,
         'drop_inter_class_edge': False,
         'loss_func'         :'default',     #'imbalance', 'triplet'
         'ws_beta'           : 20,
@@ -118,46 +118,34 @@ configuration ={
     # Only configurations that's different with default are specified here
     'model_list':
     [
-        # # smoothing by test21
-        # {
-        #     'Model' : 0,
-        #     'smoothing'         :'test21',
-        #     'alpha'             : 0.3,
-        #     'beta'              : 0.001,
-        #     'connection'        : 'ff',
-        #     'conv'              : 'gcn',
-        #     'layer_size': [256],
-        # },
-        # # gcn
-        # {
-        #     'Model' : 0,
-        #     'layer_size': [256],
-        #     'drop_inter_class_edge' : True,
-        # },
-        # lp
         {
+            'train_size': [train_size for i in range(10)],
             'Model' : 17,
-            'alpha' : 1e-6,
-        },
-        # ff
-        # {
-        #     'Model' : 0,
-        #     'connection' : 'ff',
-        #     'layer_size': [256],
-        #     'learning_rate'     : 0.1,
-        # },
+            'alpha' : alpha,
+        } for train_size in [4,8,12,16,20] for alpha in [1e-6, 1e-3, 0.05, 0.1, 0.5, 1]
     ] +
+    [
+        {
+            'train_size': [train_size for i in range(10)],
+            'Model'     :0,
+            'connection': 'cc',
+            'layer_size': [64],
+            'epochs'    : 100,
+        } for train_size in [4,8,12,16,20]
+    ]
+    +
     [
         # smoothing by test21
         {
+            'train_size': [train_size for i in range(10)],
             'Model' : 0,
             'smoothing'         :'test21',
             'alpha'             : alpha,
             'beta'              : beta,
             'connection'        : 'ff',
             'conv'              : 'gcn',
-            'layer_size': [256],
-        } for beta in [500, 700, 900, 1100] for alpha in [1e-8, 1e-6, 1e-4, 1e-2, 0.3]
+            'layer_size': [64],
+        } for train_size in [4,8,12,16,20] for beta in [200, 300, 400] for alpha in [0.05, 0.1, 0.3]
     ]
     # [
     #     # gcn_taubin
@@ -170,51 +158,27 @@ configuration ={
     #         'taubin_repeat'     : repeat,
     #     } for repeat in [3,4,5]
     # ] +
-    # # [
-    # #     # Ideal low-pass filter
-    # #     {
-    # #         'Model' : 28,
-    # #         'smoothing'         :  None,
-    # #         'connection'        : 'ff',
-    # #         'conv'              : 'gcn',
-    # #         'k'                 : k
-    # #     } for k in [150, 200, 300]
-    # # ]
-    # # +
-    # # [
-    # #     # only one convolutional layer
-    # #     {
-    # #         'Model': 0,
-    # #         'connection': 'cf',
-    # #         'conv': 'test21',
-    # #         'alpha': 0.3,
-    # #         'beta': 0.001,
-    # #     },
-    # # ] +
     # [
-    #     # smoothing by test21
+    #     # Ideal low-pass filter
     #     {
-    #         'Model' : 0,
-    #         'smoothing'         :'test21',
-    #         'alpha'             : alpha,
-    #         'beta'              : beta,
+    #         'Model' : 28,
+    #         'smoothing'         :  None,
     #         'connection'        : 'ff',
     #         'conv'              : 'gcn',
-    #         'layer_size': [256],
-    #     } for alpha in [0.1, 0.3, 1] for beta in [0.0009, 0.001, 0.0015]
-    # ]+
-    # [
-    #     # smoothing by test21
-    #     {
-    #         'Model' : 0,
-    #         'smoothing'         :'test21_norm',
-    #         'alpha'             : alpha,
-    #         'beta'              : beta,
-    #         'connection'        : 'ff',
-    #         'conv'              : 'gcn',
-    #         'layer_size': [256],
-    #     } for alpha in [0.1, 0.3, 1] for beta in [0.0009, 0.001, 0.0015]
+    #         'k'                 : k
+    #     } for k in [150, 200, 300]
     # ]
+    # +
+    # [
+    #     # only one convolutional layer
+    #     {
+    #         'Model': 0,
+    #         'connection': 'cf',
+    #         'conv': 'test21',
+    #         'alpha': 0.3,
+    #         'beta': 0.001,
+    #     },
+    # ] +
 }
 
 # Parse args

@@ -143,14 +143,14 @@ def train(model_config, sess, seed, data_split = None):
               'logging        : {}'.format(model_config['logging']),
               sep='\n')
     elif model_config['Model'] == 17:
-        alpha = 1e-6
         stored_A = stored_A + '_A_I'
         if model_config['drop_inter_class_edge']:
             stored_A = None
-        test_acc, test_acc_of_class, prediction = Model17(adj, alpha, y_train, train_mask, y_test,
+        test_acc, test_acc_of_class, prediction = Model17(adj, model_config['alpha'], y_train, train_mask, y_test,
                                                           stored_A=stored_A)
         print("Test set results: accuracy= {:.5f}".format(test_acc))
         print("accuracy of each class=", test_acc_of_class)
+        print("Total time={}s".format(time.time()-very_begining))
         return test_acc, test_acc_of_class, prediction, size_of_each_class, time.time()-very_begining
     elif model_config['Model'] == 18:
         y_train, train_mask = Model9(adj, model_config['t'], model_config['alpha'],
