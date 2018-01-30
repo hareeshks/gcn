@@ -13,6 +13,7 @@ from gcn.utils import construct_feed_dict, preprocess_features, drop_inter_class
     Model1, Model2, Model3, Model4, Model5, Model6, Model7, Model8, Model9, \
     Model10, Model11, Model12, Model16, Model17, Model19, Model20, Model22, taubin_smoothor, smooth, Model26, Test21, Model28
 from gcn.models import GCN_MLP
+import cnn
 
 from config import configuration, args
 import sys
@@ -45,15 +46,14 @@ def train(model_config, sess, seed, data_split = None):
     else:
         # Load data
         adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask, size_of_each_class, triplet = \
-            load_data(model_config['dataset'],
-                      train_size=model_config['train_size'],
-                      validation_size=model_config['validation_size'], model_config=model_config)
+            load_data(model_config['dataset'],train_size=model_config['train_size'],
+                      validation_size=model_config['validation_size'],
+                      model_config=model_config, shuffle=model_config['shuffle'])
         stored_A = model_config['dataset']
         if model_config['drop_inter_class_edge']:
             adj = drop_inter_class_edge(adj)
             stored_A = model_config['dataset']+'_drop'
         # preprocess_features
-        features = preprocess_features(features, feature_type=model_config['feature'])
         features = smooth(features, adj, model_config['smoothing'], model_config, stored_A=stored_A + '_A_I')
         data_split = {
             'adj' : adj,
@@ -192,12 +192,16 @@ def train(model_config, sess, seed, data_split = None):
     elif model_config['Model'] == 23:
         if model_config['classifier'] == 'tree':
             clf = tree.DecisionTreeClassifier(max_depth=model_config['tree_depth'])
+            clf.fit(features[train_mask], np.argmax(y_train[train_mask], axis=1))
+            prediction = clf.predict(features[test_mask])
         elif model_config['classifier'] == 'svm':
             clf = svm.SVC(kernel='rbf', gamma=model_config['gamma'], class_weight='balanced', degree=model_config['svm_degree'])
+            clf.fit(features[train_mask], np.argmax(y_train[train_mask], axis=1))
+            prediction = clf.predict(features[test_mask])
+        elif model_config['classifier'] == 'cnn':
+            prediction = cnn.train(model_config, features, train_mask, y_train, test_mask, y_test)
         else:
             raise ValueError("model_config['classifier'] should be in ['svm', 'tree']")
-        clf.fit(features[train_mask], np.argmax(y_train[train_mask], axis=1))
-        prediction = clf.predict(features[test_mask])
         test_acc = np.sum(prediction == np.argmax(y_test[test_mask], axis=1))/np.sum(test_mask)
         # test_acc = test_acc[0]
         one_hot_prediction = np.zeros(y_test[test_mask].shape)
@@ -205,7 +209,8 @@ def train(model_config, sess, seed, data_split = None):
         test_acc_of_class = np.sum(one_hot_prediction*y_test[test_mask], axis=0)/np.sum(y_test[test_mask], axis=0) #TODO
         print("Test set results: cost= {:.5f} accuracy= {:.5f} time= {:.5f}".format(0.,test_acc,0.))
         print("accuracy of each class=", test_acc_of_class)
-        return test_acc, test_acc_of_class, prediction
+        print("Total time={}s".format(time.time()-very_begining))
+        return test_acc, test_acc_of_class, prediction, size_of_each_class, time.time() - very_begining
     elif model_config['Model'] == 26:
         adj = Model26(adj, model_config['t'], model_config['alpha'],
                                      y_train, train_mask, stored_A = stored_A+'_A_I')
@@ -502,8 +507,8 @@ if __name__ == '__main__':
     print("{:<8}\t{:<8}\t{:<8}\t{:<8}\t{:<8}\t{:<8}\t{:<8}".format('DATASET', 'train_size', 'valid_size', 'RESULTS', 'STD', 'TIME', 'NAME'))
     for model_config, acc_mean, acc_std, t in zip(configuration['model_list'], acc_means, acc_stds, duration):
         print("{:<8}\t{:<8}\t{:<8}\t{:<8.6f}\t{:<8.6f}\t{:<8.2f}\t{:<8}".format(model_config['dataset'],
-                                                                          str(model_config['train_size']) + '%',
-                                                                          str(model_config['validation_size']) + '%',
+                                                                          str(model_config['train_size']) + 'per class',
+                                                                          str(model_config['validation_size']),
                                                                           acc_mean,
                                                                           acc_std,
                                                                           t,

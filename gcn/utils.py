@@ -99,7 +99,7 @@ def get_triplet(y_train, train_mask, max_triplets):
     np_triple = np.concatenate(np.array([triplet]), axis = 1)
     return np_triple
 
-def load_data(dataset_str, train_size, validation_size, model_config):
+def load_data(dataset_str, train_size, validation_size, model_config, shuffle=True):
     """Load data."""
     if dataset_str in ['USPS-Fea', 'CIFAR-Fea', 'Cifar_10000_fea', 'Cifar_R10000_fea', 'MNIST-Fea', 'MNIST-10000', 'MNIST-5000']:
         data = sio.loadmat('data/{}.mat'.format(dataset_str))
@@ -173,6 +173,7 @@ def load_data(dataset_str, train_size, validation_size, model_config):
             adj = nx.adjacency_matrix(nx.from_dict_of_lists(graph))
         features[test_idx_reorder, :] = features[test_idx_range, :]
         labels[test_idx_reorder, :] = labels[test_idx_range, :]
+        features = preprocess_features(features, feature_type=model_config['feature'])
 
     global all_labels
     all_labels = labels.copy()
@@ -180,31 +181,37 @@ def load_data(dataset_str, train_size, validation_size, model_config):
     # split the data set
     idx = np.arange(len(labels))
     no_class = labels.shape[1]  # number of class
-    validation_size = validation_size * len(idx) // 100
-    if hasattr(train_size, '__getitem__'):
+    # validation_size = validation_size * len(idx) // 100
+    # if not hasattr(train_size, '__getitem__'):
+    train_size = [train_size for i in range(labels.shape[1])]
+    if shuffle:
         np.random.shuffle(idx)
-        idx_train = []
-        count = [0 for i in range(no_class)]
-        label_each_class = train_size
-        next = 0
-        for i in idx:
-            if count == label_each_class:
-                break
-            next += 1
-            for j in range(no_class):
-                if labels[i, j] and count[j] < label_each_class[j]:
-                    idx_train.append(i)
-                    count[j] += 1
-        idx_val = idx[next:next+500]
-        idx_test = idx[next+500:]
+    idx_train = []
+    count = [0 for i in range(no_class)]
+    label_each_class = train_size
+    next = 0
+    for i in idx:
+        if count == label_each_class:
+            break
+        next += 1
+        for j in range(no_class):
+            if labels[i, j] and count[j] < label_each_class[j]:
+                idx_train.append(i)
+                count[j] += 1
+    if model_config['validate']:
+        idx_val = idx[next:next+validation_size]
+        idx_test = idx[next+validation_size:]
     else:
-        labels_of_class = [0]
-        while (np.prod(labels_of_class) == 0):
-            np.random.shuffle(idx)
-            idx_train = idx[0:int(len(idx) * train_size // 100)]
-            labels_of_class = np.sum(labels[idx_train], axis=0)
-        idx_val = idx[-500 - validation_size:-500]
-        idx_test = idx[-500:]
+        idx_val = idx[next:]
+        idx_test = idx[next:]
+    # else:
+    #     labels_of_class = [0]
+    #     while (np.prod(labels_of_class) == 0):
+    #         np.random.shuffle(idx)
+    #         idx_train = idx[0:int(len(idx) * train_size // 100)]
+    #         labels_of_class = np.sum(labels[idx_train], axis=0)
+    #     idx_val = idx[-500 - validation_size:-500]
+    #     idx_test = idx[-500:]
     print('labels of each class : ', np.sum(labels[idx_train], axis=0))
     # idx_val = idx[len(idx) * train_size // 100:len(idx) * (train_size // 2 + 50) // 100]
     # idx_test = idx[len(idx) * (train_size // 2 + 50) // 100:len(idx)]
@@ -952,9 +959,6 @@ def Model20(prediction, t, y_train, train_mask, W, alpha, stored_A):
 
 
 def smooth(features, adj, smoothing, model_config, stored_A=None):
-    alpha = model_config['alpha']
-    beta = model_config['beta']
-
     if smoothing is None:
         return features
     if smoothing == 'poly':
@@ -969,10 +973,9 @@ def smooth(features, adj, smoothing, model_config, stored_A=None):
             new_feature = L.dot(new_feature) + a * features
         return new_feature
     elif smoothing == 'ap':
-        return Model22(adj, features, alpha, stored_A)
+        return Model22(adj, features, model_config['alpha'], stored_A)
     elif smoothing == 'taubin':
-        smoothor = taubin_smoothor(adj, model_config['taubin_lambda'], model_config['taubin_mu'], model_config['taubin_repeat'])
-        return sp.csr_matrix(smoothor.dot(features))
+        return taubin_smoothing(adj, model_config['taubin_lambda'], model_config['taubin_mu'], model_config['taubin_repeat'], features)
     elif smoothing == 'ap_appro':
         adj = normalize_adj(adj + sp.eye(adj.shape[0]), type='rw')
         # n = adj.shape[0]
@@ -981,17 +984,17 @@ def smooth(features, adj, smoothing, model_config, stored_A=None):
         # L = sp.diags(D) - adj
         new_feature = sp.csr_matrix(np.zeros(features.shape))
         for i in range(3):
-            new_feature = adj.dot(new_feature) / (alpha + 1) + features
+            new_feature = adj.dot(new_feature) / (model_config['alpha'] + 1) + features
         return new_feature
     elif smoothing == 'test21':
-        smoothor = Test21(adj, alpha, beta, stored_A)
+        smoothor = Test21(adj, model_config['alpha'], model_config['beta'], stored_A)
         return sp.csr_matrix(smoothor * features)
     elif smoothing == 'test21_norm':
-        smoothor = Test21(adj, alpha, beta, stored_A)
+        smoothor = Test21(adj, model_config['alpha'], model_config['beta'], stored_A)
         features = sp.csr_matrix(smoothor * features)
         return normalize(features, norm='l1', axis=1, copy=False)
     elif smoothing == 'test27':
-        return Test27(adj, features, alpha, beta, stored_A)
+        return Test27(adj, features, model_config['alpha'], model_config['beta'], stored_A)
     else:
         raise ValueError("smoothing must be one of 'poly' | 'ap' | 'taubin' | 'test21' | 'test27' ")
 
@@ -1130,38 +1133,22 @@ def Model28(adj, features, dataset, k):
     features = features.reshape([n, -1])
     return sp.csr_matrix(features, dtype=np.float32)
 
+def taubin_smoothing(adj, lam, mu, repeat, features):
+    n = adj.shape[0]
+    adj = normalize(adj + sp.eye(adj.shape[0]), norm='l1', axis=1)
+    smoothor = sp.eye(n) * (1 - lam) + lam * adj
+    inflator = sp.eye(n) * (1 - mu) + mu * adj
+    step_transformor = smoothor * inflator
+    for i in range(repeat):
+        features = step_transformor.dot(features)
+    return features
+
 def taubin_smoothor(adj, lam, mu, repeat):
     n = adj.shape[0]
     adj = normalize(adj + sp.eye(adj.shape[0]), norm='l1', axis=1)
     smoothor = sp.eye(n) * (1 - lam) + lam * adj
     inflator = sp.eye(n) * (1 - mu) + mu * adj
     step_transformor = smoothor * inflator
-
-    # # eigenvalue truncation
-    # vals, vecs = slinalg.eig(adj.toarray())
-    # vals = vals.astype(np.float64)
-    # vec_inv = np.linalg.inv(vecs)
-    # idx = np.argsort(vals)
-    # idx = idx[-88:]
-    # vals = vals[idx]
-    # vecs = vecs[:,idx]
-    # adj = vecs.dot(np.diag(vals)).dot(vec_inv[idx,:])
-    # return sp.csr_matrix(adj)
-
-    # # band-pass filter
-    # f = 1.0
-    # t = 0.1
-    # d = 2
-    # repeat = int(1/np.log2(d*d/(d*d-t*t)))
-    # step_transformor = (adj - (f-d)*sp.eye(adj.shape[0]))*(adj - (f+d)*sp.eye(adj.shape[0]))*(-1/d/d)
-    #
-    # return sp.csr_matrix(np.linalg.matrix_power(step_transformor.toarray(), n=repeat))
-
-    step_transformor = smoothor * inflator
-    transformor = sp.eye(n)
-    # for i in range(repeat):
-    #     transformor *= step_transformor
-
     transformor = sp.eye(n)
     base = step_transformor
     while repeat != 0:
@@ -1169,7 +1156,7 @@ def taubin_smoothor(adj, lam, mu, repeat):
             transformor *= base
         base *= base
         repeat //= 2
-        print(repeat)
+        # print(repeat)
     return transformor
 
 
@@ -1204,20 +1191,21 @@ def construct_feed_dict(features, support, labels, labels_mask, triplet, placeho
 
 
 def preprocess_model_config(model_config):
-    model_config['connection'] = list(model_config['connection'])
-    # judge if parameters are legal
-    for c in model_config['connection']:
-        if c not in ['c', 'd', 'r', 'f', 'C']:
-            raise ValueError(
-                'connection string specified by --connection can only contain "c", "d", "r", "f", "C" but "{}" found'.format(
-                    c))
-    for i in model_config['layer_size']:
-        if not isinstance(i, int):
-            raise ValueError('layer_size should be a list of int, but found {}'.format(model_config['layer_size']))
-        if i <= 0:
-            raise ValueError('layer_size must be greater than 0, but found {}' % i)
-    if not len(model_config['connection']) == len(model_config['layer_size']) + 1:
-        raise ValueError('length of connection string should be equal to length of layer_size list plus 1')
+    if model_config['Model'] not in [17, 23]:
+        model_config['connection'] = list(model_config['connection'])
+        # judge if parameters are legal
+        for c in model_config['connection']:
+            if c not in ['c', 'd', 'r', 'f', 'C']:
+                raise ValueError(
+                    'connection string specified by --connection can only contain "c", "d", "r", "f", "C" but "{}" found'.format(
+                        c))
+        for i in model_config['layer_size']:
+            if not isinstance(i, int):
+                raise ValueError('layer_size should be a list of int, but found {}'.format(model_config['layer_size']))
+            if i <= 0:
+                raise ValueError('layer_size must be greater than 0, but found {}' % i)
+        if not len(model_config['connection']) == len(model_config['layer_size']) + 1:
+            raise ValueError('length of connection string should be equal to length of layer_size list plus 1')
 
     # Generate name
     if not model_config['name']:
@@ -1232,6 +1220,8 @@ def preprocess_model_config(model_config):
                 model_name = 'tree'
                 if model_config['tree_depth']:
                     model_name += '_' + str(model_config['tree_depth'])
+            elif model_config['classifier'] == 'cnn':
+                model_name = 'cnn'
             else:
                 raise ValueError('classifier:' + model_config['classifier'])
         else:
@@ -1239,6 +1229,18 @@ def preprocess_model_config(model_config):
             for char, size in \
                     zip(model_config['connection'][1:], model_config['layer_size']):
                 model_name += str(size) + char
+
+            if model_config['conv'] == 'cheby':
+                model_name += '_cheby' + str(model_config['max_degree'])
+            elif model_config['conv'] == 'taubin':
+                model_name += '_conv_taubin' + str(model_config['taubin_lambda']) \
+                              + '_' + str(model_config['taubin_mu']) \
+                              + '_' + str(model_config['taubin_repeat'])
+            elif model_config['conv'] == 'test21':
+                model_name += '_' + 'conv_test21' + '_' + str(model_config['alpha']) + '_' + str(model_config['beta'])
+
+            if model_config['validate']:
+                model_name += '_validate'
 
         if model_config['smoothing'] == 'ap':
             model_name += '_' + 'ap_smoothing' + str(model_config['alpha'])
@@ -1257,18 +1259,6 @@ def preprocess_model_config(model_config):
                           + '_' + str(model_config['taubin_mu']) \
                           + '_' + str(model_config['taubin_repeat'])
 
-        if model_config['conv'] == 'cheby':
-            model_name += '_cheby' + str(model_config['max_degree'])
-        if model_config['conv'] == 'taubin':
-            model_name += '_conv_taubin' + str(model_config['taubin_lambda']) \
-                          + '_' + str(model_config['taubin_mu']) \
-                          + '_' + str(model_config['taubin_repeat'])
-        if model_config['conv'] == 'test21':
-            model_name += '_' + 'conv_test21' + '_' + str(model_config['alpha']) + '_' + str(model_config['beta'])
-        
-        if model_config['validate']:
-            model_name += '_validate'
-        
         model_name += '_Model' + str(model_config['Model'])
         
         if model_config['Model'] in [1]:
