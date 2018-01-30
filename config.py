@@ -30,14 +30,15 @@ import pprint
 # 28 imitate spectral clustering
 configuration ={
     # repeating times
-    'repeating'             : 3,
+    'repeating'             : 1,
 
     # The default model configuration
     'default':{
-        'dataset'           : 'MNIST-10000',     # 'Dataset string. (cora | citeseer | pubmed | CIFAR-Fea | Cifar_10000_fea | Cifar_R10000_fea | USPS-Fea | MNIST-Fea | MNIST-10000)'
-        # 'train_size'        : 1,         # if train_size is a number, then use TRAIN_SIZE%% labels.
-        'train_size'        : [20 for i in range(10)], # if train_size is a list of numbers, then it specifies training lables for each class.
-        'validation_size'   : 20,           # 'Use VALIDATION_SIZE% data to train model'
+        'dataset'           : 'MNIST-Fea',     # 'Dataset string. (cora | citeseer | pubmed | CIFAR-Fea | Cifar_10000_fea | Cifar_R10000_fea | USPS-Fea | MNIST-Fea | MNIST-10000)'
+        'shuffle'           : False,
+        'train_size'        : 20,         # if train_size is a number, then use TRAIN_SIZE labels per class.
+        # 'train_size'        : [20 for i in range(10)], # if train_size is a list of numbers, then it specifies training labels for each class.
+        'validation_size'   : 500,           # 'Use VALIDATION_SIZE data to train model'
         'validate'          : False,        # Whether use validation set
         'conv'              : 'gcn',        # 'conv type. (gcn | cheby | chebytheta | gcn_rw | taubin | test21)'
         'max_degree'        : 2,            # 'Maximum Chebyshev polynomial degree.'
@@ -100,14 +101,15 @@ configuration ={
         'taubin_t'          : 0.2,
 
         'logging'           : False,         # 'Weather or not to record log'
-        'logdir'            : '',           # 'Log directory.''
-        'name'              : '',           # 'name of the model. Serve as an ID of model.'
+        'logdir'            : None,           # 'Log directory.''
+        'model_dir'         : './model/',
+        'name'              : None,           # 'name of the model. Serve as an ID of model.'
         # if logdir or name are empty string,
         # logdir or name will be auto generated according to the
         # structure of the network
 
         'threads'           : 2*cpu_count(),  #'Number of threads'
-        'train'             : False,
+        'train'             : True,
         'drop_inter_class_edge': False,
         'loss_func'         :'default',     #'imbalance', 'triplet'
         'ws_beta'           : 20,
@@ -119,34 +121,72 @@ configuration ={
     'model_list':
     [
         {
-            'train_size': [train_size for i in range(10)],
-            'Model' : 17,
-            'alpha' : alpha,
-        } for train_size in [4,8,12,16,20] for alpha in [1e-6, 1e-3, 0.05, 0.1, 0.5, 1]
-    ] +
-    [
-        {
-            'train_size': [train_size for i in range(10)],
-            'Model'     :0,
-            'connection': 'cc',
-            'layer_size': [64],
-            'epochs'    : 100,
-        } for train_size in [4,8,12,16,20]
+            'train_size'        : 100,
+            'Model'             : 23,
+            'classifier'        : 'cnn',
+            'learning_rate'     : 0.001,
+            'epochs'            : 20000,
+
+            'smoothing'         : 'taubin',
+            'taubin_lambda'     : 1,
+            'taubin_mu'         : 0,
+            'taubin_repeat'     : repeat,
+        } for repeat in [4,5,3,2,1]
     ]
     +
     [
-        # smoothing by test21
         {
-            'train_size': [train_size for i in range(10)],
-            'Model' : 0,
-            'smoothing'         :'test21',
-            'alpha'             : alpha,
-            'beta'              : beta,
-            'connection'        : 'ff',
-            'conv'              : 'gcn',
-            'layer_size': [64],
-        } for train_size in [4,8,12,16,20] for beta in [200, 300, 400] for alpha in [0.05, 0.1, 0.3]
+            'train_size'        : 100,
+            'Model'             : 23,
+            'classifier'        : 'cnn',
+            'learning_rate'     : 0.001,
+            'epochs'            : 20000,
+        }
     ]
+    #     +
+    # [
+    #     {
+    #         'Model'     :0,
+    #         'connection': 'ff',
+    #         'layer_size': [64],
+    #         'smoothing': 'taubin',
+    #         # 'smoothing'         : None,
+    #         'taubin_lambda': 1,
+    #         'taubin_mu': 0,
+    #         'taubin_repeat': taubin_repeat,
+    #     } for taubin_repeat in [2,3,4,5]
+    # ]
+    +
+    [
+        {
+            'Model'     :0,
+            'connection': 'cc',
+            'layer_size': [64],
+            'epochs'    : 200,
+            'learning_rate': 0.005,
+        },
+    ]
+    +
+    [
+        {
+            'Model': 17,
+            'alpha': alpha,
+        } for alpha in [1e-6]
+    ]
+    # +
+    # [
+    #     # smoothing by test21
+    #     {
+    #         'train_size': train_size,
+    #         'Model' : 0,
+    #         'smoothing'         :'test21',
+    #         'alpha'             : alpha,
+    #         'beta'              : beta,
+    #         'connection'        : 'ff',
+    #         'conv'              : 'gcn',
+    #         'layer_size': [64],
+    #     } for train_size in [4,8,12,16,20] for beta in [200, 300, 400] for alpha in [0.05, 0.1, 0.3]
+    # ]
     # [
     #     # gcn_taubin
     #     {
