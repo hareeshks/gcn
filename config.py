@@ -36,7 +36,7 @@ configuration ={
     'default':{
         'dataset'           : 'cora',     # 'Dataset string. (cora | citeseer | pubmed | CIFAR-Fea | Cifar_10000_fea | Cifar_R10000_fea | USPS-Fea | MNIST-Fea | MNIST-10000)'
         'shuffle'           : True,
-        'train_size'        : 16,         # if train_size is a number, then use TRAIN_SIZE labels per class.
+        'train_size'        : 12,         # if train_size is a number, then use TRAIN_SIZE labels per class.
         # 'train_size'        : [20 for i in range(10)], # if train_size is a list of numbers, then it specifies training labels for each class.
         'validation_size'   : 500,           # 'Use VALIDATION_SIZE data to train model'
         'validate'          : False,        # Whether use validation set
@@ -144,7 +144,7 @@ configuration ={
             'taubin_lambda': 1,
             'taubin_mu': 0,
             'taubin_repeat': repeat,
-        } for repeat in [2,3,4]
+        } for repeat in [2,3,4,5]
     ]+[
         {
             'Model'     :0,
@@ -154,7 +154,7 @@ configuration ={
             'taubin_lambda': 0.5,
             'taubin_mu': 0,
             'taubin_repeat': repeat,
-        } for repeat in [6]
+        } for repeat in [4,6,8,10]
     ]+[
         {
             'Model'     :0,
@@ -172,7 +172,7 @@ configuration ={
             'smoothing': 'test21',
             'alpha': 0.5,
             'beta' : beta,
-        } for beta in [5, 10, 20, 30, 40 ,50]
+        } for beta in [20, 50, 80, 100]
     ]
     # +[
     #     {

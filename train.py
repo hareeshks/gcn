@@ -478,7 +478,7 @@ if __name__ == '__main__':
     # acc_without_valid = [[] for i in configuration['model_list']]
     # acc_of_class_without_valid = [[] for i in configuration['model_list']]
     # Read configuration
-    for _ in range(configuration['repeating']):
+    for r in range(configuration['repeating']):
         for model_config, i in zip(configuration['model_list'], range(len(configuration['model_list']))):
             # Set random seed
             seed = model_config['random_seed']
@@ -496,6 +496,7 @@ if __name__ == '__main__':
                     duration[i].append(t)
                     # acc_without_valid[i].append(test_acc_without_valid)
                     # acc_of_class_without_valid[i].append(test_acc_of_class_without_valid)
+        print('repeated ', r, 'rounds')
 
     acc_means = np.mean(acc, axis=1)
     acc_stds = np.std(acc, axis=1)
