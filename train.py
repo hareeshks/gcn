@@ -507,7 +507,7 @@ if __name__ == '__main__':
     print("{:<8}\t{:<8}\t{:<8}\t{:<8}\t{:<8}\t{:<8}\t{:<8}".format('DATASET', 'train_size', 'valid_size', 'RESULTS', 'STD', 'TIME', 'NAME'))
     for model_config, acc_mean, acc_std, t in zip(configuration['model_list'], acc_means, acc_stds, duration):
         print("{:<8}\t{:<8}\t{:<8}\t{:<8.6f}\t{:<8.6f}\t{:<8.2f}\t{:<8}".format(model_config['dataset'],
-                                                                          str(model_config['train_size']) + 'per class',
+                                                                          str(model_config['train_size']) + ' per class',
                                                                           str(model_config['validation_size']),
                                                                           acc_mean,
                                                                           acc_std,
