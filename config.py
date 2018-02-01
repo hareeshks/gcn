@@ -36,7 +36,7 @@ configuration ={
     'default':{
         'dataset'           : 'cora',     # 'Dataset string. (cora | citeseer | pubmed | CIFAR-Fea | Cifar_10000_fea | Cifar_R10000_fea | USPS-Fea | MNIST-Fea | MNIST-10000)'
         'shuffle'           : True,
-        'train_size'        : 12,         # if train_size is a number, then use TRAIN_SIZE labels per class.
+        'train_size'        : 8,         # if train_size is a number, then use TRAIN_SIZE labels per class.
         # 'train_size'        : [20 for i in range(10)], # if train_size is a list of numbers, then it specifies training labels for each class.
         'validation_size'   : 500,           # 'Use VALIDATION_SIZE data to train model'
         'validate'          : False,        # Whether use validation set
@@ -73,7 +73,7 @@ configuration ={
         # "d" stands for dense net.
         # See layer_size for details.
 
-        'layer_size'        : [32],
+        'layer_size'        : [16],
         # A list or any sequential object. Describe the size of each layer.
         # e.g. "--connection ccd --layer_size [7,8]"
         #     This combination describe a network as follow:
@@ -144,7 +144,7 @@ configuration ={
             'taubin_lambda': 1,
             'taubin_mu': 0,
             'taubin_repeat': repeat,
-        } for repeat in [2,3,4,5]
+        } for repeat in [2,3,4,5,6,7]
     ]+[
         {
             'Model'     :0,
@@ -154,7 +154,7 @@ configuration ={
             'taubin_lambda': 0.5,
             'taubin_mu': 0,
             'taubin_repeat': repeat,
-        } for repeat in [4,6,8,10]
+        } for repeat in [4,6,8,10,12,14]
     ]+[
         {
             'Model'     :0,
