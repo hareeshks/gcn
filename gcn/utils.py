@@ -1146,6 +1146,8 @@ def taubin_smoothing(adj, lam, mu, repeat, features):
     step_transformor = smoothor * inflator
     for i in range(repeat):
         features = step_transformor.dot(features)
+    if sp.issparse(features):
+        features = features.toarray()
     return features
 
 def taubin_smoothor(adj, lam, mu, repeat):

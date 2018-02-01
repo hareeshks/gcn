@@ -36,13 +36,13 @@ configuration ={
     'default':{
         'dataset'           : 'cora',     # 'Dataset string. (cora | citeseer | pubmed | CIFAR-Fea | Cifar_10000_fea | Cifar_R10000_fea | USPS-Fea | MNIST-Fea | MNIST-10000)'
         'shuffle'           : True,
-        'train_size'        : 20,         # if train_size is a number, then use TRAIN_SIZE labels per class.
+        'train_size'        : 16,         # if train_size is a number, then use TRAIN_SIZE labels per class.
         # 'train_size'        : [20 for i in range(10)], # if train_size is a list of numbers, then it specifies training labels for each class.
         'validation_size'   : 500,           # 'Use VALIDATION_SIZE data to train model'
         'validate'          : False,        # Whether use validation set
         'conv'              : 'gcn',        # 'conv type. (gcn | cheby | chebytheta | gcn_rw | taubin | test21)'
         'max_degree'        : 2,            # 'Maximum Chebyshev polynomial degree.'
-        'learning_rate'     : 0.005,         # 'Initial learning rate.'
+        'learning_rate'     : 0.01,         # 'Initial learning rate.'
         'epochs'            : 200,          # 'Number of epochs to train.'
 
         # config the absorption probability
@@ -73,7 +73,7 @@ configuration ={
         # "d" stands for dense net.
         # See layer_size for details.
 
-        'layer_size'        : [16],
+        'layer_size'        : [32],
         # A list or any sequential object. Describe the size of each layer.
         # e.g. "--connection ccd --layer_size [7,8]"
         #     This combination describe a network as follow:
@@ -124,7 +124,6 @@ configuration ={
         {
             'Model'     :0,
             'connection': 'cc',
-            'layer_size': [256],
         },
         # LP
         {
@@ -135,24 +134,21 @@ configuration ={
         {
             'Model'     :0,
             'connection': 'ff',
-            'layer_size': [256],
         },
     ]+[
         {
             'Model'     :0,
             'connection': 'ff',
-            'layer_size': [256],
 
             'smoothing': 'taubin',
             'taubin_lambda': 1,
             'taubin_mu': 0,
             'taubin_repeat': repeat,
-        } for repeat in [3]
+        } for repeat in [2,3,4]
     ]+[
         {
             'Model'     :0,
             'connection': 'ff',
-            'layer_size': [256],
 
             'smoothing': 'taubin',
             'taubin_lambda': 0.5,
@@ -163,21 +159,20 @@ configuration ={
         {
             'Model'     :0,
             'connection': 'ff',
-            'layer_size': [256],
 
             'smoothing': 'ap',
             'alpha': 0.5,
         }
-    ]+[
+    ]
+    +[
         {
             'Model'     :0,
             'connection': 'ff',
-            'layer_size': [256],
 
             'smoothing': 'test21',
             'alpha': 0.5,
             'beta' : beta,
-        } for beta in [5, 10, 15, 20, 30, 40]
+        } for beta in [5, 10, 20, 30, 40 ,50]
     ]
     # +[
     #     {
