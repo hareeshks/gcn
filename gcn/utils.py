@@ -107,6 +107,7 @@ def load_data(dataset_str, train_size, validation_size, model_config, shuffle=Tr
         labels = np.zeros([l.shape[0],np.max(data['labels'])+1])
         labels[np.arange(l.shape[0]), l.astype(np.int8)] = 1
         features = data['X']
+        sample = features[0].copy()
         adj = data['G']
     else:
         names = ['x', 'y', 'tx', 'ty', 'allx', 'ally', 'graph']
@@ -988,7 +989,7 @@ def smooth(features, adj, smoothing, model_config, stored_A=None):
         return new_feature
     elif smoothing == 'test21':
         smoothor = Test21(adj, model_config['alpha'], model_config['beta'], stored_A)
-        return sp.csr_matrix(smoothor * features)
+        return smoothor * features
     elif smoothing == 'test21_norm':
         smoothor = Test21(adj, model_config['alpha'], model_config['beta'], stored_A)
         features = sp.csr_matrix(smoothor * features)
@@ -1001,7 +1002,11 @@ def smooth(features, adj, smoothing, model_config, stored_A=None):
 
 def Model22(adj, features, alpha, stored_A=None):
     P = absorption_probability(adj + sp.eye(adj.shape[0]), alpha, stored_A=stored_A)
-    return sp.csr_matrix(alpha * P.dot(features))
+    P *= alpha
+    if sp.issparse(features):
+        return  P * features
+    else:
+        return  P.dot(features)
 
 
 def Test21(adj, alpha, beta, stored_A=None):
@@ -1029,7 +1034,7 @@ def Test21(adj, alpha, beta, stored_A=None):
     num = np.sum(P)
     print("neighbor accuracy = ", np.sum(c*P)/num,'average #neighbors = ', num/P.shape[0], 'energy reserved=', percentage)
     # normalize(P, norm='l1', axis=1, copy=False)
-    return sp.csr_matrix(P)
+    return sp.csr_matrix(P/beta)
 
 def Test27(adj, features, alpha, beta, stored_A=None):
     P = absorption_probability(adj + sp.eye(adj.shape[0]), alpha, stored_A=stored_A)

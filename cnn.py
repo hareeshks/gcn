@@ -34,7 +34,11 @@ def generate_cnn_model_fn(model_config):
         # Input Layer
         # Reshape X to 4-D tensor: [batch_size, width, height, channels]
         # MNIST images are 28x28 pixels, and have one color channel
-        input_layer = tf.reshape(features["x"], [-1, 28, 28, 1])
+        if model_config['dataset'] == 'Cifar_10000_fea':
+            input_layer = tf.transpose(tf.reshape(features["x"], [-1,3,32,32]),[0,2,3,1])
+        else:
+            width = int(int(features["x"].get_shape()[1])**0.5)
+            input_layer = tf.reshape(features["x"], [-1, width, width, 1])
 
         # Convolutional Layer #1
         # Computes 32 features using a 5x5 filter with ReLU activation.
@@ -75,7 +79,9 @@ def generate_cnn_model_fn(model_config):
         # Flatten tensor into a batch of vectors
         # Input Tensor Shape: [batch_size, 7, 7, 64]
         # Output Tensor Shape: [batch_size, 7 * 7 * 64]
-        pool2_flat = tf.reshape(pool2, [-1, 7 * 7 * 64])
+        d = pool2.get_shape()
+        d = int(d[1]*d[2]*d[3])
+        pool2_flat = tf.reshape(pool2, [-1, d])
 
         # Dense Layer
         # Densely connected layer with 1024 neurons
@@ -173,9 +179,9 @@ def train(model_config, features, train_mask, y_train, test_mask, y_test):
                 shuffle=True)
             mnist_classifier.train(
                 input_fn=train_input_fn,
-                steps=min(500, steps),
+                steps=min(200, steps),
                 hooks=[])
-        steps -= 500
+        steps -= 200
         # Evaluate the model and print results
         ckpt = None
         eval_input_fn = tf.estimator.inputs.numpy_input_fn(

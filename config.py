@@ -34,15 +34,15 @@ configuration ={
 
     # The default model configuration
     'default':{
-        'dataset'           : 'MNIST-Fea',     # 'Dataset string. (cora | citeseer | pubmed | CIFAR-Fea | Cifar_10000_fea | Cifar_R10000_fea | USPS-Fea | MNIST-Fea | MNIST-10000)'
-        'shuffle'           : False,
+        'dataset'           : 'cora',     # 'Dataset string. (cora | citeseer | pubmed | CIFAR-Fea | Cifar_10000_fea | Cifar_R10000_fea | USPS-Fea | MNIST-Fea | MNIST-10000)'
+        'shuffle'           : True,
         'train_size'        : 20,         # if train_size is a number, then use TRAIN_SIZE labels per class.
         # 'train_size'        : [20 for i in range(10)], # if train_size is a list of numbers, then it specifies training labels for each class.
         'validation_size'   : 500,           # 'Use VALIDATION_SIZE data to train model'
         'validate'          : False,        # Whether use validation set
         'conv'              : 'gcn',        # 'conv type. (gcn | cheby | chebytheta | gcn_rw | taubin | test21)'
         'max_degree'        : 2,            # 'Maximum Chebyshev polynomial degree.'
-        'learning_rate'     : 0.02,         # 'Initial learning rate.'
+        'learning_rate'     : 0.005,         # 'Initial learning rate.'
         'epochs'            : 200,          # 'Number of epochs to train.'
 
         # config the absorption probability
@@ -92,7 +92,7 @@ configuration ={
 
         'smoothing'         : None,        # 'poly'| 'ap'  | 'taubin' | 'test21' | 'test21_norm' | None
         'alpha'             : 1e-6,         # 'alpha' in the construction of  absorption probability
-        'beta'              : 0.05,
+        'beta'              : 10,
         'poly_parameters'   : [1,-2,1],           # coefficients of p(L_rw)
         'taubin_lambda'     : 0.3,
         'taubin_mu'         : -0.31,
@@ -120,30 +120,94 @@ configuration ={
     # Only configurations that's different with default are specified here
     'model_list':
     [
+        # GCN
         {
-            'train_size'        : 100,
-            'Model'             : 23,
-            'classifier'        : 'cnn',
-            'learning_rate'     : 0.001,
-            'epochs'            : 20000,
+            'Model'     :0,
+            'connection': 'cc',
+            'layer_size': [256],
+        },
+        # LP
+        {
+            'Model': 17,
+            'alpha': 1e-6,
+        },
+        # MLP
+        {
+            'Model'     :0,
+            'connection': 'ff',
+            'layer_size': [256],
+        },
+    ]+[
+        {
+            'Model'     :0,
+            'connection': 'ff',
+            'layer_size': [256],
 
-            'smoothing'         : 'taubin',
-            'taubin_lambda'     : 1,
-            'taubin_mu'         : 0,
-            'taubin_repeat'     : repeat,
-        } for repeat in [4,5,3,2,1]
-    ]
-    +
-    [
+            'smoothing': 'taubin',
+            'taubin_lambda': 1,
+            'taubin_mu': 0,
+            'taubin_repeat': repeat,
+        } for repeat in [3]
+    ]+[
         {
-            'train_size'        : 100,
-            'Model'             : 23,
-            'classifier'        : 'cnn',
-            'learning_rate'     : 0.001,
-            'epochs'            : 20000,
+            'Model'     :0,
+            'connection': 'ff',
+            'layer_size': [256],
+
+            'smoothing': 'taubin',
+            'taubin_lambda': 0.5,
+            'taubin_mu': 0,
+            'taubin_repeat': repeat,
+        } for repeat in [6]
+    ]+[
+        {
+            'Model'     :0,
+            'connection': 'ff',
+            'layer_size': [256],
+
+            'smoothing': 'ap',
+            'alpha': 0.5,
         }
+    ]+[
+        {
+            'Model'     :0,
+            'connection': 'ff',
+            'layer_size': [256],
+
+            'smoothing': 'test21',
+            'alpha': 0.5,
+            'beta' : beta,
+        } for beta in [5, 10, 15, 20, 30, 40]
     ]
-    #     +
+    # +[
+    #     {
+    #         'train_size'        : 60,
+    #         'Model'             : 23,
+    #         'classifier'        : 'cnn',
+    #         'learning_rate'     : 0.001,
+    #         'epochs'            : 400,
+    #
+    #         'smoothing'         : 'taubin',
+    #         'taubin_lambda'     : 1,
+    #         'taubin_mu'         : 0,
+    #         'taubin_repeat'     : repeat,
+    #     } for repeat in [0]
+    # ]
+    # +
+    # [
+    #     {
+    #         'train_size'        : 60,
+    #         'Model'             : 23,
+    #         'classifier'        : 'cnn',
+    #         'learning_rate'     : 0.001,
+    #         'epochs'            : 400,
+    #
+    #         'smoothing'         : 'test21',
+    #         'alpha'             : 0.3,
+    #         'beta'              : 200,
+    #     }
+    # ]
+    # +
     # [
     #     {
     #         'Model'     :0,
@@ -154,25 +218,35 @@ configuration ={
     #         'taubin_lambda': 1,
     #         'taubin_mu': 0,
     #         'taubin_repeat': taubin_repeat,
-    #     } for taubin_repeat in [2,3,4,5]
+    #     } for taubin_repeat in [4,2,0]
     # ]
-    +
-    [
-        {
-            'Model'     :0,
-            'connection': 'cc',
-            'layer_size': [64],
-            'epochs'    : 200,
-            'learning_rate': 0.005,
-        },
-    ]
-    +
-    [
-        {
-            'Model': 17,
-            'alpha': alpha,
-        } for alpha in [1e-6]
-    ]
+    # +
+    # [
+    #     {
+    #         'Model'     :0,
+    #         'connection': 'ff',
+    #         'layer_size': [256],
+    #         'epochs'    : 200,
+    #         'learning_rate': 0.005,
+    #     },
+    # ]
+    #     +
+    # [
+    #     {
+    #         'Model'     :0,
+    #         'connection': 'cc',
+    #         'layer_size': [256],
+    #         'epochs'    : 200,
+    #         'learning_rate': 0.005,
+    #     },
+    # ]
+    # +
+    # [
+    #     {
+    #         'Model': 17,
+    #         'alpha': alpha,
+    #     } for alpha in [1e-6]
+    # ]
     # +
     # [
     #     # smoothing by test21
