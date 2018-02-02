@@ -54,7 +54,9 @@ def train(model_config, sess, seed, data_split = None):
             adj = drop_inter_class_edge(adj)
             stored_A = model_config['dataset']+'_drop'
         # preprocess_features
+        begin = time.time()
         features = smooth(features, adj, model_config['smoothing'], model_config, stored_A=stored_A + '_A_I')
+        print(time.time()-begin,'s')
         data_split = {
             'adj' : adj,
             'features' : features,
@@ -363,7 +365,7 @@ def train(model_config, sess, seed, data_split = None):
     # test_cost_without_valid, test_acc_without_valid = sess.run([model.loss, model.accuracy], feed_dict=test_feed_dict)
     # test_duration_without_valid = time.time() - t_test
 
-    print(time.time() - very_begining)
+    # print(time.time() - very_begining)
     if model_config['train']:
         # Train model
         print('training...')
