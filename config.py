@@ -30,19 +30,19 @@ import pprint
 # 28 imitate spectral clustering
 configuration ={
     # repeating times
-    'repeating'             : 1,
+    'repeating'             : 3,
 
     # The default model configuration
     'default':{
         'dataset'           : 'cora',     # 'Dataset string. (cora | citeseer | pubmed | CIFAR-Fea | Cifar_10000_fea | Cifar_R10000_fea | USPS-Fea | MNIST-Fea | MNIST-10000)'
         'shuffle'           : True,
-        'train_size'        : 8,         # if train_size is a number, then use TRAIN_SIZE labels per class.
+        'train_size'        : 4,         # if train_size is a number, then use TRAIN_SIZE labels per class.
         # 'train_size'        : [20 for i in range(10)], # if train_size is a list of numbers, then it specifies training labels for each class.
         'validation_size'   : 500,           # 'Use VALIDATION_SIZE data to train model'
         'validate'          : False,        # Whether use validation set
         'conv'              : 'gcn',        # 'conv type. (gcn | cheby | chebytheta | gcn_rw | taubin | test21)'
         'max_degree'        : 2,            # 'Maximum Chebyshev polynomial degree.'
-        'learning_rate'     : 0.01,         # 'Initial learning rate.'
+        'learning_rate'     : 0.02,         # 'Initial learning rate.'
         'epochs'            : 200,          # 'Number of epochs to train.'
 
         # config the absorption probability
@@ -93,6 +93,7 @@ configuration ={
         'smoothing'         : None,        # 'poly'| 'ap'  | 'taubin' | 'test21' | 'test21_norm' | None
         'alpha'             : 1e-6,         # 'alpha' in the construction of  absorption probability
         'beta'              : 10,
+        'ap_appro_degree'   : 10,
         'poly_parameters'   : [1,-2,1],           # coefficients of p(L_rw)
         'taubin_lambda'     : 0.3,
         'taubin_mu'         : -0.31,
@@ -118,62 +119,72 @@ configuration ={
 
     # The list of model to be train.
     # Only configurations that's different with default are specified here
-    'model_list':
-    [
-        # GCN
-        {
-            'Model'     :0,
-            'connection': 'cc',
-        },
-        # LP
-        {
-            'Model': 17,
-            'alpha': 1e-6,
-        },
-        # MLP
-        {
-            'Model'     :0,
-            'connection': 'ff',
-        },
-    ]+[
+    'model_list':[
         {
             'Model'     :0,
             'connection': 'ff',
 
-            'smoothing': 'taubin',
-            'taubin_lambda': 1,
-            'taubin_mu': 0,
-            'taubin_repeat': repeat,
-        } for repeat in [2,3,4,5,6,7]
-    ]+[
-        {
-            'Model'     :0,
-            'connection': 'ff',
-
-            'smoothing': 'taubin',
-            'taubin_lambda': 0.5,
-            'taubin_mu': 0,
-            'taubin_repeat': repeat,
-        } for repeat in [4,6,8,10,12,14]
-    ]+[
-        {
-            'Model'     :0,
-            'connection': 'ff',
-
-            'smoothing': 'ap',
-            'alpha': 0.5,
-        }
+            'smoothing': 'ap_appro',
+            'alpha': alpha,
+        } for train_size in [4,8,12,16,20] for alpha in [0.02, 0.05, 0.08, 0.1, 0.2, 0.3]
     ]
-    +[
-        {
-            'Model'     :0,
-            'connection': 'ff',
-
-            'smoothing': 'test21',
-            'alpha': 0.5,
-            'beta' : beta,
-        } for beta in [20, 50, 80, 100]
-    ]
+    # [
+    #     # GCN
+    #     {
+    #         'Model'     :0,
+    #         'connection': 'cc',
+    #     },
+    #     # LP
+    #     {
+    #         'Model': 17,
+    #         'alpha': 1e-6,
+    #     },
+    #     # MLP
+    #     {
+    #         'Model'     :0,
+    #         'connection': 'ff',
+    #     },
+    # ]
+    # +[
+    #     {
+    #         'Model'     :0,
+    #         'connection': 'ff',
+    #
+    #         'smoothing': 'taubin',
+    #         'taubin_lambda': 1,
+    #         'taubin_mu': 0,
+    #         'taubin_repeat': repeat,
+    #     } for repeat in [3,5,6,7,8]
+    # ]+[
+    #     {
+    #         'Model'     :0,
+    #         'connection': 'ff',
+    #
+    #         'smoothing': 'taubin',
+    #         'taubin_lambda': 0.5,
+    #         'taubin_mu': 0,
+    #         'taubin_repeat': repeat,
+    #     } for repeat in [6,10,12,14,16]
+    # ]
+    # +[
+    #     {
+    #         'Model'     :0,
+    #         'connection': 'ff',
+    #
+    #         'smoothing': 'ap',
+    #         'alpha': alpha,
+    #     } for alpha in [0.05, 0.1, 0.2, 0.5]
+    # ]
+    # +[
+    #     {
+    #         'Model'     :0,
+    #         'connection': 'ff',
+    #
+    #         'smoothing': 'test21',
+    #         'alpha': 0.5,
+    #         'beta' : beta,
+    #     } for beta in [5, 10, 15, 20, 30]
+    # ]
     # +[
     #     {
     #         'train_size'        : 60,
@@ -202,92 +213,6 @@ configuration ={
     #         'beta'              : 200,
     #     }
     # ]
-    # +
-    # [
-    #     {
-    #         'Model'     :0,
-    #         'connection': 'ff',
-    #         'layer_size': [64],
-    #         'smoothing': 'taubin',
-    #         # 'smoothing'         : None,
-    #         'taubin_lambda': 1,
-    #         'taubin_mu': 0,
-    #         'taubin_repeat': taubin_repeat,
-    #     } for taubin_repeat in [4,2,0]
-    # ]
-    # +
-    # [
-    #     {
-    #         'Model'     :0,
-    #         'connection': 'ff',
-    #         'layer_size': [256],
-    #         'epochs'    : 200,
-    #         'learning_rate': 0.005,
-    #     },
-    # ]
-    #     +
-    # [
-    #     {
-    #         'Model'     :0,
-    #         'connection': 'cc',
-    #         'layer_size': [256],
-    #         'epochs'    : 200,
-    #         'learning_rate': 0.005,
-    #     },
-    # ]
-    # +
-    # [
-    #     {
-    #         'Model': 17,
-    #         'alpha': alpha,
-    #     } for alpha in [1e-6]
-    # ]
-    # +
-    # [
-    #     # smoothing by test21
-    #     {
-    #         'train_size': train_size,
-    #         'Model' : 0,
-    #         'smoothing'         :'test21',
-    #         'alpha'             : alpha,
-    #         'beta'              : beta,
-    #         'connection'        : 'ff',
-    #         'conv'              : 'gcn',
-    #         'layer_size': [64],
-    #     } for train_size in [4,8,12,16,20] for beta in [200, 300, 400] for alpha in [0.05, 0.1, 0.3]
-    # ]
-    # [
-    #     # gcn_taubin
-    #     {
-    #         'Model' : 0,
-    #         'smoothing'         :  'taubin',
-    #         'connection'        : 'ff',
-    #         'taubin_lambda'     : 1,
-    #         'taubin_mu'         : 0,
-    #         'taubin_repeat'     : repeat,
-    #     } for repeat in [3,4,5]
-    # ] +
-    # [
-    #     # Ideal low-pass filter
-    #     {
-    #         'Model' : 28,
-    #         'smoothing'         :  None,
-    #         'connection'        : 'ff',
-    #         'conv'              : 'gcn',
-    #         'k'                 : k
-    #     } for k in [150, 200, 300]
-    # ]
-    # +
-    # [
-    #     # only one convolutional layer
-    #     {
-    #         'Model': 0,
-    #         'connection': 'cf',
-    #         'conv': 'test21',
-    #         'alpha': 0.3,
-    #         'beta': 0.001,
-    #     },
-    # ] +
 }
 
 # Parse args

@@ -19,9 +19,7 @@ from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
-from gcn.utils import load_data, smooth, preprocess_model_config
 from os import path
-from config import configuration
 
 tf.logging.set_verbosity(tf.logging.INFO)
 

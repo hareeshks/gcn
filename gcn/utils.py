@@ -960,6 +960,7 @@ def Model20(prediction, t, y_train, train_mask, W, alpha, stored_A):
 
 
 def smooth(features, adj, smoothing, model_config, stored_A=None):
+    print(smoothing, 'Smoothing...',end='')
     if smoothing is None:
         return features
     if smoothing == 'poly':
@@ -978,18 +979,13 @@ def smooth(features, adj, smoothing, model_config, stored_A=None):
     elif smoothing == 'taubin':
         return taubin_smoothing(adj, model_config['taubin_lambda'], model_config['taubin_mu'], model_config['taubin_repeat'], features)
     elif smoothing == 'ap_appro':
-        adj = normalize_adj(adj + sp.eye(adj.shape[0]), type='rw')
-        # n = adj.shape[0]
-        # adj = adj.copy().astype(np.float32)
-        # D = adj.sum(1).flat
-        # L = sp.diags(D) - adj
-        new_feature = sp.csr_matrix(np.zeros(features.shape))
-        for i in range(3):
-            new_feature = adj.dot(new_feature) / (model_config['alpha'] + 1) + features
-        return new_feature
+        return ap_approximate(adj, features, model_config['alpha'])
     elif smoothing == 'test21':
         smoothor = Test21(adj, model_config['alpha'], model_config['beta'], stored_A)
-        return smoothor * features
+        features = smoothor * features
+        if sp.issparse(features):
+            features = features.toarray()
+        return features
     elif smoothing == 'test21_norm':
         smoothor = Test21(adj, model_config['alpha'], model_config['beta'], stored_A)
         features = sp.csr_matrix(smoothor * features)
@@ -1001,13 +997,26 @@ def smooth(features, adj, smoothing, model_config, stored_A=None):
 
 
 def Model22(adj, features, alpha, stored_A=None):
-    P = absorption_probability(adj + sp.eye(adj.shape[0]), alpha, stored_A=stored_A)
+    adj = normalize(adj + sp.eye(adj.shape[0]), 'l1', axis=1)
+    if stored_A:
+        stored_A += '_r'
+    P = absorption_probability(adj, alpha, stored_A=stored_A)
     P *= alpha
     if sp.issparse(features):
         return  P * features
     else:
         return  P.dot(features)
 
+
+def ap_approximate(adj, features, alpha):
+    adj = normalize(adj + sp.eye(adj.shape[0]), 'l1', axis=1) / (alpha + 1)
+    if sp.issparse(features):
+        features = features.toarray()
+    new_feature = np.zeros(features.shape)
+    for _ in range(int(np.ceil(4/alpha))):
+        new_feature = adj * new_feature + features
+    new_feature *= alpha / (alpha + 1)
+    return new_feature
 
 def Test21(adj, alpha, beta, stored_A=None):
     P = absorption_probability(adj + sp.eye(adj.shape[0]), alpha, stored_A=stored_A)
@@ -1250,7 +1259,9 @@ def preprocess_model_config(model_config):
                 model_name += '_validate'
 
         if model_config['smoothing'] == 'ap':
-            model_name += '_' + 'ap_smoothing' + str(model_config['alpha'])
+            model_name += '_' + 'ap_smoothing' + '_' + str(model_config['alpha'])
+        if model_config['smoothing'] == 'ap_appro':
+            model_name += '_' + 'ap_appro' + '_' + str(model_config['alpha'])
         elif model_config['smoothing'] == 'test21':
             model_name += '_' + 'test21' + '_' + str(model_config['alpha']) + '_' + str(model_config['beta'])
         elif model_config['smoothing'] == 'test21_norm':
