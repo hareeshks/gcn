@@ -36,7 +36,7 @@ configuration ={
     'default':{
         'dataset'           : 'pubmed',     # 'Dataset string. (cora | citeseer | pubmed | CIFAR-Fea | Cifar_10000_fea | Cifar_R10000_fea | USPS-Fea | MNIST-Fea | MNIST-10000)'
         'shuffle'           : True,
-        'train_size'        : 20,         # if train_size is a number, then use TRAIN_SIZE labels per class.
+        'train_size'        : 4,         # if train_size is a number, then use TRAIN_SIZE labels per class.
         # 'train_size'        : [20 for i in range(10)], # if train_size is a list of numbers, then it specifies training labels for each class.
         'validation_size'   : 500,           # 'Use VALIDATION_SIZE data to train model'
         'validate'          : False,        # Whether use validation set
@@ -119,15 +119,6 @@ configuration ={
     # The list of model to be train.
     # Only configurations that's different with default are specified here
     'model_list':
-    # +[
-    #     {
-    #         'Model'     :0,
-    #         'connection': 'ff',
-    #
-    #         'smoothing': 'ap_appro',
-    #         'alpha': alpha,
-    #     } for train_size in [4,8,12,16,20] for alpha in [0.02, 0.05, 0.08, 0.1, 0.2, 0.3]
-    # ]
     [
         # GCN
         {
@@ -154,7 +145,7 @@ configuration ={
             'taubin_lambda': 1,
             'taubin_mu': 0,
             'taubin_repeat': repeat,
-        } for repeat in [2,3,4,5,6,7,8,9,10]
+        } for repeat in [3,4,5,6,7,8,9,10]
     ]+[
         {
             'Model'     :0,
@@ -173,7 +164,7 @@ configuration ={
 
             'smoothing': 'ap_appro',
             'alpha': alpha,
-        } for alpha in [0.05, 0.08, 0.1, 0.2, 0.3, 0.5]
+        } for alpha in [0.05, 0.08, 0.1, 0.2, 0.3]
     ]
     +[
         {
@@ -183,36 +174,8 @@ configuration ={
             'smoothing': 'test21',
             'alpha': 0.5,
             'beta' : beta,
-        } for beta in [10, 15, 20, 30, 50]
+        } for beta in [20, 30, 50, 100, 200]
     ]
-    # +[
-    #     {
-    #         'train_size'        : 60,
-    #         'Model'             : 23,
-    #         'classifier'        : 'cnn',
-    #         'learning_rate'     : 0.001,
-    #         'epochs'            : 400,
-    #
-    #         'smoothing'         : 'taubin',
-    #         'taubin_lambda'     : 1,
-    #         'taubin_mu'         : 0,
-    #         'taubin_repeat'     : repeat,
-    #     } for repeat in [0]
-    # ]
-    # +
-    # [
-    #     {
-    #         'train_size'        : 60,
-    #         'Model'             : 23,
-    #         'classifier'        : 'cnn',
-    #         'learning_rate'     : 0.001,
-    #         'epochs'            : 400,
-    #
-    #         'smoothing'         : 'test21',
-    #         'alpha'             : 0.3,
-    #         'beta'              : 200,
-    #     }
-    # ]
 }
 
 # Parse args
