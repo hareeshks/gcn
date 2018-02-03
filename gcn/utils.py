@@ -979,7 +979,8 @@ def smooth(features, adj, smoothing, model_config, stored_A=None):
     elif smoothing == 'taubin':
         return taubin_smoothing(adj, model_config['taubin_lambda'], model_config['taubin_mu'], model_config['taubin_repeat'], features)
     elif smoothing == 'ap_appro':
-        return ap_approximate(adj, features, model_config['alpha'])
+        k = int(np.ceil(4/model_config['alpha']))
+        return ap_approximate(adj, features, model_config['alpha'], k)
     elif smoothing == 'test21':
         smoothor = Test21(adj, model_config['alpha'], model_config['beta'], stored_A)
         features = smoothor * features
@@ -1008,12 +1009,16 @@ def Model22(adj, features, alpha, stored_A=None):
         return  P.dot(features)
 
 
-def ap_approximate(adj, features, alpha):
+def ap_approximate(adj, features, alpha, k):
     adj = normalize(adj + sp.eye(adj.shape[0]), 'l1', axis=1) / (alpha + 1)
+    # D = sp.diags(np.array(adj.sum(axis=1)).flatten())+alpha*sp.eye(adj.shape[0])
+    # D = D.power(-1)
+    # adj = D*adj
+    # features = D*alpha*features
     if sp.issparse(features):
         features = features.toarray()
     new_feature = np.zeros(features.shape)
-    for _ in range(int(np.ceil(4/alpha))):
+    for _ in range(k):
         new_feature = adj * new_feature + features
     new_feature *= alpha / (alpha + 1)
     return new_feature
@@ -1254,7 +1259,8 @@ def preprocess_model_config(model_config):
                               + '_' + str(model_config['taubin_repeat'])
             elif model_config['conv'] == 'test21':
                 model_name += '_' + 'conv_test21' + '_' + str(model_config['alpha']) + '_' + str(model_config['beta'])
-
+            elif model_config['conv'] == 'gcn_unnorm':
+                model_name += '_' + 'gcn_unnorm'
             if model_config['validate']:
                 model_name += '_validate'
 

@@ -261,6 +261,9 @@ def train(model_config, sess, seed, data_split = None):
         # origin_adj_support = [preprocess_adj(origin_adj)]
         support = [preprocess_adj(adj)]
         num_supports = 1
+    elif model_config['conv'] == 'gcn_unnorm':
+        support = [sparse_to_tuple(adj.astype(np.float32))]
+        num_supports = 1
     elif model_config['conv'] =='gcn_rw':
         support = [preprocess_adj(adj, type='rw')]
         num_supports = 1
