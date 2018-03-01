@@ -107,6 +107,7 @@ def load_data(dataset_str, train_size, validation_size, model_config, shuffle=Tr
         labels = np.zeros([l.shape[0],np.max(data['labels'])+1])
         labels[np.arange(l.shape[0]), l.astype(np.int8)] = 1
         features = data['X']
+        sample = features[0].copy()
         adj = data['G']
     else:
         names = ['x', 'y', 'tx', 'ty', 'allx', 'ally', 'graph']
