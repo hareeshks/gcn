@@ -107,7 +107,6 @@ def load_data(dataset_str, train_size, validation_size, model_config, shuffle=Tr
         labels = np.zeros([l.shape[0],np.max(data['labels'])+1])
         labels[np.arange(l.shape[0]), l.astype(np.int8)] = 1
         features = data['X']
-        sample = features[0].copy()
         adj = data['G']
     else:
         names = ['x', 'y', 'tx', 'ty', 'allx', 'ally', 'graph']
@@ -199,12 +198,20 @@ def load_data(dataset_str, train_size, validation_size, model_config, shuffle=Tr
             if labels[i, j] and count[j] < label_each_class[j]:
                 idx_train.append(i)
                 count[j] += 1
+
+    test_size = model_config['test_size']
     if model_config['validate']:
+        if test_size:
+            assert next+validation_size<len(idx)
         idx_val = idx[next:next+validation_size]
-        idx_test = idx[next+validation_size:]
+        assert next+validation_size+test_size < len(idx)
+        idx_test = idx[-test_size:] if test_size else idx[next+validation_size:]
+
     else:
-        idx_val = idx[next:]
-        idx_test = idx[next:]
+        if test_size:
+            assert next+test_size<len(idx)
+        idx_val = idx[-test_size:] if test_size else idx[next:]
+        idx_test = idx[-test_size:] if test_size else idx[next:]
     # else:
     #     labels_of_class = [0]
     #     while (np.prod(labels_of_class) == 0):
@@ -311,9 +318,11 @@ def normalize_adj(adj, type='sym'):
         return adj_normalized
 
 
-def preprocess_adj(adj, type='sym'):
+def preprocess_adj(adj, type='sym', loop=True):
     """Preprocessing of adjacency matrix for simple GCN model and conversion to tuple representation."""
-    adj_normalized = normalize_adj(adj + sp.eye(adj.shape[0]), type=type)  #
+    if loop:
+        adj = adj + sp.eye(adj.shape[0])
+    adj_normalized = normalize_adj(adj, type=type)  #
     return sparse_to_tuple(adj_normalized)
 
 
@@ -826,12 +835,6 @@ def Model16(prediction, t, y_train, train_mask):
 
 def Model17(adj, alpha, y_train, train_mask, y_test, stored_A=None):
     P = absorption_probability(adj, alpha, stored_A=stored_A, column=train_mask)
-    # # weighted classifier
-    # prediction = np.zeros(y_train.shape)
-    # prediction[np.arange(y_train.shape[0]),np.argmax(P.dot(y_train), axis=1)] = 1
-    # test_acc = np.sum(prediction*y_test)/np.sum(y_test)
-    # test_acc_of_class = np.sum(prediction*y_test, axis=0)/np.sum(y_test, axis=0)
-    # print(test_acc, test_acc_of_class)
     P = P[:, train_mask]
 
     # nearest clssifier
@@ -996,6 +999,43 @@ def smooth(features, adj, smoothing, model_config, stored_A=None):
     else:
         raise ValueError("smoothing must be one of 'poly' | 'ap' | 'taubin' | 'test21' | 'test27' ")
 
+def sparse_encoding(features, adj, stored):
+
+    n = adj.shape[0]
+    adj_I = adj + sp.diags(np.ones(n))
+    adj_I_sym = normalize_adj(adj_I)
+
+    try:
+        # raise Exception('DEBUG')
+        vals, vecs, vec_inv = np.load(stored+'_I_vals.npy'), \
+                              np.load(stored+'_I_vecs.npy'), \
+                              np.load(stored + '_I_vec_inv.npy')
+        print('load vals, vecs, vec_inv from files')
+    except:
+        # vals, vecs = slinalg.eigsh(adj_I_sym.toarray(), k=adj_I_sym.shape[0]-1)
+        vals, vecs = linalg.eigh(adj_I_sym.toarray())
+        vec_inv = vecs.T
+
+        np.save(stored+'_I_vals.npy', vals)
+        np.save(stored+'_I_vecs.npy', vecs)
+        np.save(stored+'_I_vec_inv.npy', vec_inv)
+    c = vec_inv*features
+    c_abs = np.abs(c)
+    sorted = np.sort(c_abs.flatten())
+    # acc = np.add.accumulate(sorted)
+    # import matplotlib.pyplot as plt
+    # # plt.plot(acc)
+    # for i in range(c.shape[1]):
+    #     plt.plot(vals, c_abs[:,i], 'o')
+    #     plt.show()
+
+    sparsity = 4 # int(n*0.1)
+    # print(sorted[-features.shape[1]*sparsity])
+    # c[c_abs<sorted[-features.shape[1]*sparsity]]=0
+    # features = vecs.dot(c)
+    c[:n-200,:]=0
+    features = vecs.dot(c)
+    return features
 
 def Model22(adj, features, alpha, stored_A=None):
     adj = normalize(adj + sp.eye(adj.shape[0]), 'l1', axis=1)
@@ -1261,6 +1301,8 @@ def preprocess_model_config(model_config):
                 model_name += '_' + 'conv_test21' + '_' + str(model_config['alpha']) + '_' + str(model_config['beta'])
             elif model_config['conv'] == 'gcn_unnorm':
                 model_name += '_' + 'gcn_unnorm'
+            elif model_config['conv'] == 'gcn_noloop':
+                model_name += '_' + 'gcn_noloop'
             if model_config['validate']:
                 model_name += '_validate'
 
@@ -1282,6 +1324,12 @@ def preprocess_model_config(model_config):
             model_name += '_taubin' + str(model_config['taubin_lambda']) \
                           + '_' + str(model_config['taubin_mu']) \
                           + '_' + str(model_config['taubin_repeat'])
+        elif model_config['smoothing'] == 'sparse_encoding':
+            model_name += '_sparse_encoding'
+        elif model_config['smoothing'] is None:
+            pass
+        else:
+            raise ValueError('invalid smoothing')
 
         model_name += '_Model' + str(model_config['Model'])
         

@@ -16,9 +16,7 @@ from gcn.models import GCN_MLP
 import cnn
 
 from config import configuration, args
-import sys
 
-# new_adj = None
 
 def train(model_config, sess, seed, data_split = None):
     # Print model_config
@@ -192,18 +190,20 @@ def train(model_config, sess, seed, data_split = None):
         stored_A = stored_A + '_A_I'
         features = Model22(adj, features, alpha, stored_A)
     elif model_config['Model'] == 23:
+        t = time.time()
         if model_config['classifier'] == 'tree':
             clf = tree.DecisionTreeClassifier(max_depth=model_config['tree_depth'])
             clf.fit(features[train_mask], np.argmax(y_train[train_mask], axis=1))
             prediction = clf.predict(features[test_mask])
         elif model_config['classifier'] == 'svm':
-            clf = svm.SVC(kernel='rbf', gamma=model_config['gamma'], class_weight='balanced', degree=model_config['svm_degree'])
+            clf = svm.SVC()#kernel='rbf', gamma=model_config['gamma'], class_weight='balanced', degree=model_config['svm_degree'])
             clf.fit(features[train_mask], np.argmax(y_train[train_mask], axis=1))
             prediction = clf.predict(features[test_mask])
         elif model_config['classifier'] == 'cnn':
             prediction = cnn.train(model_config, features, train_mask, y_train, test_mask, y_test)
         else:
             raise ValueError("model_config['classifier'] should be in ['svm', 'tree']")
+        t = time.time()-t
         test_acc = np.sum(prediction == np.argmax(y_test[test_mask], axis=1))/np.sum(test_mask)
         # test_acc = test_acc[0]
         one_hot_prediction = np.zeros(y_test[test_mask].shape)
@@ -212,7 +212,7 @@ def train(model_config, sess, seed, data_split = None):
         print("Test set results: cost= {:.5f} accuracy= {:.5f} time= {:.5f}".format(0.,test_acc,0.))
         print("accuracy of each class=", test_acc_of_class)
         print("Total time={}s".format(time.time()-very_begining))
-        return test_acc, test_acc_of_class, prediction, size_of_each_class, time.time() - very_begining
+        return test_acc, test_acc_of_class, prediction, size_of_each_class, t
     elif model_config['Model'] == 26:
         adj = Model26(adj, model_config['t'], model_config['alpha'],
                                      y_train, train_mask, stored_A = stored_A+'_A_I')
@@ -258,11 +258,13 @@ def train(model_config, sess, seed, data_split = None):
         support = [sparse_to_tuple(Test21(adj, model_config['alpha'], beta=model_config['beta'], stored_A=stored_A + '_A_I'))]
         num_supports = 1
     elif model_config['conv'] == 'gcn':
-        # origin_adj_support = [preprocess_adj(origin_adj)]
         support = [preprocess_adj(adj)]
         num_supports = 1
     elif model_config['conv'] == 'gcn_unnorm':
         support = [sparse_to_tuple(adj.astype(np.float32))]
+        num_supports = 1
+    elif model_config['conv'] == 'gcn_noloop':
+        support = [preprocess_adj(adj, loop=False)]
         num_supports = 1
     elif model_config['conv'] =='gcn_rw':
         support = [preprocess_adj(adj, type='rw')]
@@ -291,7 +293,6 @@ def train(model_config, sess, seed, data_split = None):
         placeholders['label_per_sample'] = tf.placeholder(tf.float32, name='label_per_sample', shape=(None, label_per_sample.shape[1]))
         placeholders['sample2label'] = tf.placeholder(tf.float32, name='sample2label', shape=(label_per_sample.shape[1], y_train.shape[1]))
 
-    weight=size_of_each_class
     # Create model
     model = GCN_MLP(model_config, placeholders, input_dim=features[2][1])
 
@@ -302,31 +303,6 @@ def train(model_config, sess, seed, data_split = None):
     train_writer = None
     valid_writer = None
     saver = None
-    # if model_config['logdir']:
-    #     saver = tf.train.Saver(model.vars)
-    #     ckpt = tf.train.get_checkpoint_state(model_config['logdir'])
-    #     if None and ckpt and ckpt.model_checkpoint_path:  # never load data so far
-    #         # TODO: load from ckpt
-    #         # Read from checkpoint
-    #         print('load model from "{}"...'.format(ckpt.model_checkpoint_path))
-    #         saver.restore(sess, ckpt.model_checkpoint_path)
-    #         graph = None
-    #     else:
-    #     # Leave variables randomized
-    #         print('Random initialize variables...')
-    #         graph = sess.graph
-    #     train_writer = tf.summary.FileWriter(
-    #         path.join(model_config['logdir'], 'train'),
-    #         graph=graph)
-    #     valid_writer = tf.summary.FileWriter(path.join(model_config['logdir'], 'valid'))
-
-    # # visualize features
-    # features_var = tf.Variable(original_features.toarray(), name='features')
-    # projector_config = projector.ProjectorConfig()
-    # embedding = projector_config.embeddings.add()
-    # embedding.tensor_name = features_var.name
-    # embedding.metadata_path = path.join(train_writer.get_logdir(), 'metadata.tsv')
-    # projector.visualize_embeddings(train_writer, projector_config)
 
     # Construct feed dictionary
     if model_config['connection'] == ['f' for i in range(len(model_config['connection']))]:
@@ -363,10 +339,8 @@ def train(model_config, sess, seed, data_split = None):
     t_test = time.time()
     test_cost, test_acc, test_acc_of_class, prediction = sess.run([model.loss, model.accuracy, model.accuracy_of_class, model.prediction], feed_dict=test_feed_dict)
     test_duration = time.time() - t_test
-
-    t_test = time.time()
-    # test_cost_without_valid, test_acc_without_valid = sess.run([model.loss, model.accuracy], feed_dict=test_feed_dict)
-    # test_duration_without_valid = time.time() - t_test
+    timer = 0
+    begin = time.time()
 
     # print(time.time() - very_begining)
     if model_config['train']:
@@ -384,38 +358,37 @@ def train(model_config, sess, seed, data_split = None):
                 max_valid_acc = 0
                 max_train_acc = 0
 
-
-            t = time.time()
-
             # Training step
             if model_config['logdir'] and step % 100 == 0:
                 run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
                 run_metadata = tf.RunMetadata()
+                t = time.time()
                 sess.run(model.opt_op, feed_dict=train_feed_dict, options=run_options, run_metadata=run_metadata)
+                t = time.time()-t
                 train_writer.add_run_metadata(run_metadata, 'step%d' % step)
                 # Create the Timeline object, and write it to a json
                 with open(path.join(model_config['logdir'], 'timeline.json'), 'w') as f:
                     f.write(timeline.Timeline(run_metadata.step_stats).generate_chrome_trace_format())
             else:
+                t = time.time()
                 sess.run(model.opt_op, feed_dict=train_feed_dict)
-            train_loss, train_acc, train_summary = sess.run(
-                [model.loss, model.accuracy, model.summary],
-                feed_dict=train_feed_dict)
-
-            # Validation
-            valid_loss, valid_acc, valid_summary = sess.run(
-                [model.loss, model.accuracy, model.summary],
-                feed_dict=valid_feed_dict)
-            valid_loss_list.append(valid_loss)
+                t = time.time()-t
+            timer += t
+            train_loss, train_acc, train_summary = sess.run([model.loss, model.accuracy, model.summary],
+                                                            feed_dict=train_feed_dict)
 
             # Logging
-            global_step = model.global_step.eval(session=sess)
             if model_config['logdir']:
+                global_step = model.global_step.eval(session=sess)
                 train_writer.add_summary(train_summary, global_step)
                 valid_writer.add_summary(valid_summary, global_step)
 
             # If it's best performence so far, evalue on test set
             if model_config['validate']:
+                valid_loss, valid_acc, valid_summary = sess.run(
+                    [model.loss, model.accuracy, model.summary],
+                    feed_dict=valid_feed_dict)
+                valid_loss_list.append(valid_loss)
                 if valid_acc >= max_valid_acc:
                     max_valid_acc = valid_acc
                     t_test = time.time()
@@ -440,30 +413,26 @@ def train(model_config, sess, seed, data_split = None):
 
             # Print results
             if args.verbose:
-                print("Epoch: {:04d}".format(global_step),
+                print("Epoch: {:04d}".format(step),
                       "train_loss= {:.3f}".format(train_loss),
-                      "train_acc= {:.3f}".format(train_acc),
+                      "train_acc= {:.3f}".format(train_acc), end=' ')
+                if model_config['validate']:
+                    print(
                       "val_loss=", "{:.3f}".format(valid_loss),
-                      "val_acc= {:.3f}".format(valid_acc),
-                      "time=", "{:.5f}".format(time.time() - t))
+                      "val_acc= {:.3f}".format(valid_acc),end=' ')
+                print("time=", "{:.5f}".format(t))
 
-            if 0 < model_config['early_stopping'] < global_step \
+            if 0 < model_config['early_stopping'] < step \
                     and valid_loss_list[-1] > np.mean(valid_loss_list[-(model_config['early_stopping'] + 1):-1]):
                 print("Early stopping...")
                 break
         else:
             print("Optimization Finished!")
 
-        # new_adj = Model5(new_features, origin_adj, 1, model_config['Model5'])
-
         # Testing
         print("Test set results:", "cost=", "{:.5f}".format(test_cost),
               "accuracy=", "{:.5f}".format(test_acc), "time=", "{:.5f}".format(test_duration))
         print("accuracy of each class=", test_acc_of_class)
-
-        # Testing
-        # print("Test set results:", "cost=", "{:.5f}".format(test_cost_without_valid),
-        #       "accuracy=", "{:.5f}".format(test_acc_without_valid), "time=", "{:.5f}".format(test_duration_without_valid))
 
         # Saving
         if model_config['logdir']:
@@ -472,7 +441,7 @@ def train(model_config, sess, seed, data_split = None):
                 save_path=path.join(model_config['logdir'], 'model.ckpt'),
                 global_step=global_step)))
     print("Total time={}s".format(time.time()-very_begining))
-    return test_acc, test_acc_of_class, prediction, size_of_each_class, time.time()-very_begining
+    return test_acc, test_acc_of_class, prediction, size_of_each_class, time.time()-begin
 
 
 if __name__ == '__main__':
@@ -480,8 +449,6 @@ if __name__ == '__main__':
     acc = [[] for i in configuration['model_list']]
     acc_of_class = [[] for i in configuration['model_list']]
     duration = [[] for i in configuration['model_list']]
-    # acc_without_valid = [[] for i in configuration['model_list']]
-    # acc_of_class_without_valid = [[] for i in configuration['model_list']]
     # Read configuration
     for r in range(configuration['repeating']):
         for model_config, i in zip(configuration['model_list'], range(len(configuration['model_list']))):
@@ -499,8 +466,6 @@ if __name__ == '__main__':
                     acc[i].append(test_acc)
                     acc_of_class[i].append(test_acc_of_class)
                     duration[i].append(t)
-                    # acc_without_valid[i].append(test_acc_without_valid)
-                    # acc_of_class_without_valid[i].append(test_acc_of_class_without_valid)
         print('repeated ', r, 'rounds')
 
     acc_means = np.mean(acc, axis=1)
@@ -510,7 +475,7 @@ if __name__ == '__main__':
     # print mean, standard deviation, and model name
     print()
     print("REPEAT\t{}".format(configuration['repeating']))
-    print("{:<8}\t{:<8}\t{:<8}\t{:<8}\t{:<8}\t{:<8}\t{:<8}".format('DATASET', 'train_size', 'valid_size', 'RESULTS', 'STD', 'TIME', 'NAME'))
+    print("{:<8}\t{:<8}\t{:<8}\t{:<8}\t{:<8}\t{:<8}\t{:<8}".format('DATASET', 'train_size', 'valid_size', 'RESULTS', 'STD', 'TRAIN_TIME', 'NAME'))
     for model_config, acc_mean, acc_std, t in zip(configuration['model_list'], acc_means, acc_stds, duration):
         print("{:<8}\t{:<8}\t{:<8}\t{:<8.6f}\t{:<8.6f}\t{:<8.2f}\t{:<8}".format(model_config['dataset'],
                                                                           str(model_config['train_size']) + ' per class',
@@ -527,26 +492,3 @@ if __name__ == '__main__':
             print('{:0<5.3}'.format(acc_of_class),end=', ')
         print(']',end='')
         print('\t{:<8}'.format(model_config['name']))
-
-
-    #
-    # acc_means = np.mean(acc_without_valid, axis=1)
-    # acc_stds = np.std(acc_without_valid, axis=1)
-    # acc_of_class_means = np.mean(acc_of_class_without_valid, axis=1)
-    # # print mean, standard deviation, and model name
-    # print()
-    # print("REPEAT\t{} NOT USE VALIDATION".format(configuration['repeating']))
-    # print("{:<8}\t{:<8}\t{:<8}\t{:<8}\t{:<8}".format('DATASET', 'train_size', 'RESULTS', 'STD', 'NAME'))
-    # for model_config, acc_mean, acc_std, acc_of_class_mean in zip(configuration['model_list'], acc_means, acc_stds, acc_of_class_means):
-    #     print("{:<8}\t{:<8}\t{:<8.6f}\t{:<8.6f}\t{:<8}".format(model_config['dataset'],
-    #                                                            str(model_config['train_size']) + '%',
-    #                                                            acc_mean,
-    #                                                            acc_std,
-    #                                                            model_config['name']))
-    #
-    # for model_config, acc_of_class_mean in zip(configuration['model_list'], acc_of_class_means):
-    #     print('[', end='')
-    #     for acc_of_class in acc_of_class_mean:
-    #         print('{:0<5.3}'.format(acc_of_class), end=', ')
-    #     print(']', end='')
-    #     print('\t{:<8}'.format(model_config['name']))

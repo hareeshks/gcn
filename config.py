@@ -34,15 +34,16 @@ configuration ={
 
     # The default model configuration
     'default':{
-        'dataset'           : 'pubmed',     # 'Dataset string. (cora | citeseer | pubmed | CIFAR-Fea | Cifar_10000_fea | Cifar_R10000_fea | USPS-Fea | MNIST-Fea | MNIST-10000)'
+        'dataset'           : 'citeseer',     # 'Dataset string. (cora | citeseer | pubmed | CIFAR-Fea | Cifar_10000_fea | Cifar_R10000_fea | USPS-Fea | MNIST-Fea | MNIST-10000)'
         'shuffle'           : True,
-        'train_size'        : 4,         # if train_size is a number, then use TRAIN_SIZE labels per class.
+        'train_size'        : 20,         # if train_size is a number, then use TRAIN_SIZE labels per class.
         # 'train_size'        : [20 for i in range(10)], # if train_size is a list of numbers, then it specifies training labels for each class.
         'validation_size'   : 500,           # 'Use VALIDATION_SIZE data to train model'
         'validate'          : False,        # Whether use validation set
-        'conv'              : 'gcn',        # 'conv type. (gcn | cheby | chebytheta | gcn_rw | taubin | test21)'
+        'test_size'         : None,         # If None, all rest are test set
+        'conv'              : 'gcn',        # 'conv type. (gcn | cheby | chebytheta | gcn_rw | taubin | test21 | gcn_unnorm | gcn_noloop)'
         'max_degree'        : 2,            # 'Maximum Chebyshev polynomial degree.'
-        'learning_rate'     : 0.02,         # 'Initial learning rate.'
+        'learning_rate'     : 0.01,         # 'Initial learning rate.'
         'epochs'            : 200,          # 'Number of epochs to train.'
 
         # config the absorption probability
@@ -60,7 +61,7 @@ configuration ={
         'Model_to_add_label': { 'Model' :0 }, # for model 16
         'Model_to_predict'  : { 'Model' :0 }, # for model 16
         'Model19'           : 'union',        # 'union' | 'intersection'
-        'classifier'        : 'svm',            # 'svm' | 'tree'
+        'classifier'        : 'svm',            # 'svm' | 'tree' | 'cnn'
         'svm_kernel'        : 'rbf',        # 'rbf' | 'poly' | 'rbf' | 'sigmoid', model 23
         'gamma'             : 1e-5,         # gamma for svm, see scikit-learn document, model 23
         'svm_degree'        : 4,
@@ -73,14 +74,14 @@ configuration ={
         # "d" stands for dense net.
         # See layer_size for details.
 
-        'layer_size'        : [16],
+        'layer_size'        : [32],
         # A list or any sequential object. Describe the size of each layer.
         # e.g. "--connection ccd --layer_size [7,8]"
         #     This combination describe a network as follow:
         #     input_layer --convolution-> 7 nodes --convolution-> 8 nodes --dense-> output_layer
         #     (or say: input_layer -c-> 7 -c-> 8 -d-> output_layer)
 
-        'dropout'           : 0.2,          # 'Dropout rate (1 - keep probability).'
+        'dropout'           : 0.5,          # 'Dropout rate (1 - keep probability).'
         'weight_decay'      : 5e-4,         # 'Weight for L2 loss on embedding matrix.'
 
         'early_stopping'    : 0,
@@ -98,7 +99,7 @@ configuration ={
         'taubin_mu'         : -0.31,
         'taubin_repeat'     : 5,
         'taubin_f'          : 0.7,
-        'taubin_t'          : 0.2,
+        'taubin_t'          : 0.5,
 
         'logging'           : False,         # 'Weather or not to record log'
         'logdir'            : None,           # 'Log directory.''
@@ -113,7 +114,7 @@ configuration ={
         'drop_inter_class_edge': False,
         'loss_func'         :'default',     #'imbalance', 'triplet'
         'ws_beta'           : 20,
-		'max_triplet':1000  #for triplet, 1000 for cora to get all tripets
+        'max_triplet':1000  #for triplet, 1000 for cora to get all tripets
     },
 
     # The list of model to be train.
@@ -135,7 +136,43 @@ configuration ={
             'Model'     :0,
             'connection': 'ff',
         },
+    ]+[
+        # {
+        #     'Model'     :23,
+        #     'classifier': 'cnn',
+        # }
     ]
+    # +[
+    #     {
+    #         'Model'     :23,
+    #         'classifier': 'cnn',
+    #
+    #         'smoothing': 'taubin',
+    #         'taubin_lambda': 1,
+    #         'taubin_mu': 0,
+    #         'taubin_repeat': repeat,
+    #     } for repeat in [10]#[2,4,6,8,10,]
+    # ]
+    # +[
+    #     {
+    #         'Model'     :23,
+    #         'classifier': 'cnn',
+    #
+    #         'smoothing': 'taubin',
+    #         'taubin_lambda': 0.5,
+    #         'taubin_mu': 0,
+    #         'taubin_repeat': repeat,
+    #     } for repeat in [20]#[4,8,12,16,20]
+    # ]
+    # +[
+    #     {
+    #         'Model'     :23,
+    #         'classifier': 'cnn',
+    #
+    #         'smoothing': 'ap_appro',
+    #         'alpha': alpha,
+    #     } for alpha in [0.05]#[0.05, 0.08, 0.1, 0.2]
+    # ]
     +[
         {
             'Model'     :0,
@@ -145,37 +182,208 @@ configuration ={
             'taubin_lambda': 1,
             'taubin_mu': 0,
             'taubin_repeat': repeat,
-        } for repeat in [3,4,5,6,7,8,9,10]
-    ]+[
-        {
-            'Model'     :0,
-            'connection': 'ff',
-
-            'smoothing': 'taubin',
-            'taubin_lambda': 0.5,
-            'taubin_mu': 0,
-            'taubin_repeat': repeat,
-        } for repeat in [4,6,8,10,12,14,16,18,20]
+        } for repeat in [10]#[2,3,4,5,6,7,8,9,10]
     ]
-    +[
-        {
-            'Model'     :0,
-            'connection': 'ff',
-
-            'smoothing': 'ap_appro',
-            'alpha': alpha,
-        } for alpha in [0.05, 0.08, 0.1, 0.2, 0.3]
-    ]
-    +[
-        {
-            'Model'     :0,
-            'connection': 'ff',
-
-            'smoothing': 'test21',
-            'alpha': 0.5,
-            'beta' : beta,
-        } for beta in [20, 30, 50, 100, 200]
-    ]
+    # +[
+    #     {
+    #         'Model'     :0,
+    #         'connection': 'ff',
+    #
+    #         'smoothing': 'taubin',
+    #         'taubin_lambda': 0.5,
+    #         'taubin_mu': 0,
+    #         'taubin_repeat': repeat,
+    #     } for repeat in [4,6,8,10,12,14,16,18,20]
+    # ]
+    # +[
+    #     {
+    #         'Model'     :0,
+    #         'connection': 'ff',
+    #
+    #         'smoothing': 'ap_appro',
+    #         'alpha': alpha,
+    #     } for alpha in [0.02, 0.03, 0.05, 0.1, 0.2, 0.3, 0.5]
+    # ]
+    # +[
+    #     # SVM
+    #     {
+    #         'Model'     :23,
+    #         'classifier': 'svm',  # 'svm' | 'tree' | 'cnn'
+    #         'svm_kernel': 'rbf',  # 'rbf' | 'poly' | 'rbf' | 'sigmoid', model 23
+    #         'gamma': 0.1,  # gamma for svm, see scikit-learn document, model 23
+    #         'svm_degree': 4,
+    #     },
+    #     {
+    #         'Model'     :23,
+    #         'classifier': 'svm',  # 'svm' | 'tree' | 'cnn'
+    #         'svm_kernel': 'rbf',  # 'rbf' | 'poly' | 'rbf' | 'sigmoid', model 23
+    #         'gamma': 0.1,  # gamma for svm, see scikit-learn document, model 23
+    #         'svm_degree': 4,
+    #
+    #         'smoothing': 'sparse_encoding',
+    #     },
+    #     {
+    #         'Model'     :23,
+    #         'classifier': 'svm',  # 'svm' | 'tree' | 'cnn'
+    #         'svm_kernel': 'rbf',  # 'rbf' | 'poly' | 'rbf' | 'sigmoid', model 23
+    #         'gamma': 0.1,  # gamma for svm, see scikit-learn document, model 23
+    #         'svm_degree': 4,
+    #
+    #         'smoothing': 'taubin',
+    #         'taubin_lambda': 1,
+    #         'taubin_mu': 0,
+    #         'taubin_repeat': 5,
+    #     },
+    #     {
+    #         'Model'     :23,
+    #         'classifier': 'svm',  # 'svm' | 'tree' | 'cnn'
+    #         'svm_kernel': 'rbf',  # 'rbf' | 'poly' | 'rbf' | 'sigmoid', model 23
+    #         'gamma': 0.1,  # gamma for svm, see scikit-learn document, model 23
+    #         'svm_degree': 4,
+    #
+    #         'smoothing': 'taubin',
+    #         'taubin_lambda': 0.5,
+    #         'taubin_mu': 0,
+    #         'taubin_repeat': 10,
+    #     },
+    #     {
+    #         'Model'     :23,
+    #         'classifier': 'svm',  # 'svm' | 'tree' | 'cnn'
+    #         'svm_kernel': 'rbf',  # 'rbf' | 'poly' | 'rbf' | 'sigmoid', model 23
+    #         'gamma': 0.1,  # gamma for svm, see scikit-learn document, model 23
+    #         'svm_degree': 4,
+    #
+    #         'smoothing': 'ap_appro',
+    #         'alpha'    : 0.1
+    #     },
+    #
+    #
+    #     # Tree
+    #     {
+    #         'Model'     :23,
+    #         'classifier': 'tree',  # 'svm' | 'tree' | 'cnn'
+    #         'tree_depth': None,
+    #     },
+    #     {
+    #         'Model'     :23,
+    #         'classifier': 'tree',  # 'svm' | 'tree' | 'cnn'
+    #         'tree_depth': None,
+    #
+    #         'smoothing': 'sparse_encoding',
+    #     },
+    #     {
+    #         'Model'     :23,
+    #         'classifier': 'tree',  # 'svm' | 'tree' | 'cnn'
+    #         'tree_depth': None,
+    #
+    #         'smoothing': 'taubin',
+    #         'taubin_lambda': 1,
+    #         'taubin_mu': 0,
+    #         'taubin_repeat': 5
+    #     },
+    #     {
+    #         'Model'     :23,
+    #         'classifier': 'tree',  # 'svm' | 'tree' | 'cnn'
+    #         'tree_depth': None,
+    #
+    #         'smoothing': 'taubin',
+    #         'taubin_lambda': 0.5,
+    #         'taubin_mu': 0,
+    #         'taubin_repeat': 10
+    #     },
+    #     {
+    #         'Model'     :23,
+    #         'classifier': 'tree',  # 'svm' | 'tree' | 'cnn'
+    #         'tree_depth': None,
+    #
+    #         'smoothing': 'ap_appro',
+    #         'alpha'    : 0.1
+    #     },
+    #
+    #     # MLP
+    #     {
+    #          'Model'     :0,
+    #          'connection': 'ff',
+    #          'layer_size': [16],
+    #     },
+    #     {
+    #         'Model'     :0,
+    #         'connection': 'ff',
+    #         'layer_size': [16],
+    #
+    #         'smoothing': 'sparse_encoding',
+    #     },
+    #     {
+    #         'Model'     :0,
+    #         'connection': 'ff',
+    #         'layer_size': [16],
+    #
+    #         'smoothing': 'taubin',
+    #         'taubin_lambda': 1,
+    #         'taubin_mu': 0,
+    #         'taubin_repeat': 5
+    #     },
+    #     {
+    #         'Model'     :0,
+    #         'connection': 'ff',
+    #         'layer_size': [16],
+    #
+    #         'smoothing': 'taubin',
+    #         'taubin_lambda': 0.5,
+    #         'taubin_mu': 0,
+    #         'taubin_repeat': 10
+    #     },
+    #     {
+    #         'Model'     :0,
+    #         'connection': 'ff',
+    #         'layer_size': [16],
+    #
+    #         'smoothing': 'ap_appro',
+    #         'alpha'    : 0.1
+    #     },
+    #
+    #     # MLP
+    #     {
+    #         'Model'     :0,
+    #         'connection': 'f',
+    #         'layer_size': [],
+    #     },
+    #     {
+    #         'Model'     :0,
+    #         'connection': 'f',
+    #         'layer_size': [],
+    #
+    #         'smoothing': 'sparse_encoding',
+    #     },
+    #     {
+    #         'Model'     :0,
+    #         'connection': 'f',
+    #         'layer_size': [],
+    #
+    #         'smoothing': 'taubin',
+    #         'taubin_lambda': 1,
+    #         'taubin_mu': 0,
+    #         'taubin_repeat': 5
+    #     },
+    #     {
+    #         'Model'     :0,
+    #         'connection': 'f',
+    #         'layer_size': [],
+    #
+    #         'smoothing': 'taubin',
+    #         'taubin_lambda': 0.5,
+    #         'taubin_mu': 0,
+    #         'taubin_repeat': 10,
+    #     },
+    #     {
+    #         'Model'     :0,
+    #         'connection': 'f',
+    #         'layer_size': [],
+    #
+    #         'smoothing': 'ap_appro',
+    #         'alpha'    : 0.1,
+    #     },
+    # ]
 }
 
 # Parse args
