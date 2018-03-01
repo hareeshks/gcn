@@ -34,7 +34,7 @@ configuration ={
 
     # The default model configuration
     'default':{
-        'dataset'           : 'citeseer',     # 'Dataset string. (cora | citeseer | pubmed | CIFAR-Fea | Cifar_10000_fea | Cifar_R10000_fea | USPS-Fea | MNIST-Fea | MNIST-10000)'
+        'dataset'           : 'MNIST-Fea',     # 'Dataset string. (cora | citeseer | pubmed | CIFAR-Fea | Cifar_10000_fea | Cifar_R10000_fea | USPS-Fea | MNIST-Fea | MNIST-10000)'
         'shuffle'           : True,
         'train_size'        : 20,         # if train_size is a number, then use TRAIN_SIZE labels per class.
         # 'train_size'        : [20 for i in range(10)], # if train_size is a list of numbers, then it specifies training labels for each class.
@@ -74,7 +74,7 @@ configuration ={
         # "d" stands for dense net.
         # See layer_size for details.
 
-        'layer_size'        : [32],
+        'layer_size'        : [256],
         # A list or any sequential object. Describe the size of each layer.
         # e.g. "--connection ccd --layer_size [7,8]"
         #     This combination describe a network as follow:
@@ -121,16 +121,16 @@ configuration ={
     # Only configurations that's different with default are specified here
     'model_list':
     [
-        # GCN
-        {
-            'Model'     :0,
-            'connection': 'cc',
-        },
-        # LP
-        {
-            'Model': 17,
-            'alpha': 1e-6,
-        },
+        # # GCN
+        # {
+        #     'Model'     :0,
+        #     'connection': 'cc',
+        # },
+        # # LP
+        # {
+        #     'Model': 17,
+        #     'alpha': 1e-6,
+        # },
         # MLP
         {
             'Model'     :0,
@@ -142,17 +142,17 @@ configuration ={
         #     'classifier': 'cnn',
         # }
     ]
-    # +[
-    #     {
-    #         'Model'     :23,
-    #         'classifier': 'cnn',
-    #
-    #         'smoothing': 'taubin',
-    #         'taubin_lambda': 1,
-    #         'taubin_mu': 0,
-    #         'taubin_repeat': repeat,
-    #     } for repeat in [10]#[2,4,6,8,10,]
-    # ]
+    +[
+        {
+            'Model'     :23,
+            'classifier': 'cnn',
+
+            'smoothing': 'taubin',
+            'taubin_lambda': 1,
+            'taubin_mu': 0,
+            'taubin_repeat': repeat,
+        } for repeat in [10]#[2,4,6,8,10,]
+    ]
     # +[
     #     {
     #         'Model'     :23,
@@ -173,17 +173,17 @@ configuration ={
     #         'alpha': alpha,
     #     } for alpha in [0.05]#[0.05, 0.08, 0.1, 0.2]
     # ]
-    +[
-        {
-            'Model'     :0,
-            'connection': 'ff',
-
-            'smoothing': 'taubin',
-            'taubin_lambda': 1,
-            'taubin_mu': 0,
-            'taubin_repeat': repeat,
-        } for repeat in [10]#[2,3,4,5,6,7,8,9,10]
-    ]
+    # +[
+    #     {
+    #         'Model'     :0,
+    #         'connection': 'ff',
+    #
+    #         'smoothing': 'taubin',
+    #         'taubin_lambda': 1,
+    #         'taubin_mu': 0,
+    #         'taubin_repeat': repeat,
+    #     } for repeat in [10]#[2,3,4,5,6,7,8,9,10]
+    # ]
     # +[
     #     {
     #         'Model'     :0,

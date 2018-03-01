@@ -19,6 +19,7 @@ from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
+import time
 from os import path
 
 tf.logging.set_verbosity(tf.logging.INFO)
@@ -167,8 +168,10 @@ def train(model_config, features, train_mask, y_train, test_mask, y_test):
 
     # Train the model
     steps = model_config['epochs']
+    timer = 0
     while steps > 0:
         if model_config['train']:
+            begin = time.time()
             train_input_fn = tf.estimator.inputs.numpy_input_fn(
                 x={"x": train_data},
                 y=train_labels,
@@ -179,6 +182,7 @@ def train(model_config, features, train_mask, y_train, test_mask, y_test):
                 input_fn=train_input_fn,
                 steps=min(200, steps),
                 hooks=[])
+            timer += time.time()-begin
         steps -= 200
         # Evaluate the model and print results
         ckpt = None
@@ -194,7 +198,7 @@ def train(model_config, features, train_mask, y_train, test_mask, y_test):
             num_epochs=1,
             shuffle=False))
     prediction = list(prediction)
-    return np.array(list(map(lambda dic: dic['classes'], prediction)))
+    return np.array(list(map(lambda dic: dic['classes'], prediction))), timer
 
 
 

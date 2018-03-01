@@ -190,20 +190,22 @@ def train(model_config, sess, seed, data_split = None):
         stored_A = stored_A + '_A_I'
         features = Model22(adj, features, alpha, stored_A)
     elif model_config['Model'] == 23:
-        t = time.time()
         if model_config['classifier'] == 'tree':
             clf = tree.DecisionTreeClassifier(max_depth=model_config['tree_depth'])
+            t = time.time()
             clf.fit(features[train_mask], np.argmax(y_train[train_mask], axis=1))
+            t = time.time()-t
             prediction = clf.predict(features[test_mask])
         elif model_config['classifier'] == 'svm':
             clf = svm.SVC()#kernel='rbf', gamma=model_config['gamma'], class_weight='balanced', degree=model_config['svm_degree'])
+            t = time.time()
             clf.fit(features[train_mask], np.argmax(y_train[train_mask], axis=1))
+            t = time.time()-t
             prediction = clf.predict(features[test_mask])
         elif model_config['classifier'] == 'cnn':
-            prediction = cnn.train(model_config, features, train_mask, y_train, test_mask, y_test)
+            prediction, t = cnn.train(model_config, features, train_mask, y_train, test_mask, y_test)
         else:
             raise ValueError("model_config['classifier'] should be in ['svm', 'tree']")
-        t = time.time()-t
         test_acc = np.sum(prediction == np.argmax(y_test[test_mask], axis=1))/np.sum(test_mask)
         # test_acc = test_acc[0]
         one_hot_prediction = np.zeros(y_test[test_mask].shape)
