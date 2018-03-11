@@ -6,37 +6,16 @@ from gcn.utils import preprocess_model_config
 import argparse
 import pprint
 # import math
-# Model 11: nearest weighted
-# Model 12: see draft
-# Model 13: Model 9 + Model 11
-# Model 14: variant of weighted Model 11
-# Model 15: Model 9 + Model 14
-# Model 16: use gcn to extend train set
-#           'Model_to_add_label':   the model used to extend train set
-#           'Model_to_predict'  :   the final model
-#           't' :   if t is a scalar, it's the total number of additional labels
-#                   if t is a list, it's the number of additional labels of each class
-# 17 label propagation
-# 18 self learning with label propagation
-# Model 19: gcn and lp
-#           'Model19' : 'union',        # 'union' | 'intersection'
-# 22 LP with features
-# validate: (True | False) Whether use validation set
-# 23 other classifier
-# 24 Test21
-# 25 Test22
-# 26 Model9 with extra edges
-# 27 Test21 with different threshold for different row (preserve beta energy)
-# 28 imitate spectral clustering
+
 configuration ={
     # repeating times
     'repeating'             : 1,
 
     # The default model configuration
     'default':{
-        'dataset'           : 'MNIST-Fea',     # 'Dataset string. (cora | citeseer | pubmed | CIFAR-Fea | Cifar_10000_fea | Cifar_R10000_fea | USPS-Fea | MNIST-Fea | MNIST-10000)'
+        'dataset'           : 'cora',     # 'Dataset string. (cora | citeseer | pubmed)'
         'shuffle'           : True,
-        'train_size'        : 20,         # if train_size is a number, then use TRAIN_SIZE labels per class.
+        'train_size'        : 2,         # if train_size is a number, then use TRAIN_SIZE labels per class.
         # 'train_size'        : [20 for i in range(10)], # if train_size is a list of numbers, then it specifies training labels for each class.
         'validation_size'   : 500,           # 'Use VALIDATION_SIZE data to train model'
         'validate'          : False,        # Whether use validation set
@@ -48,24 +27,10 @@ configuration ={
 
         # config the absorption probability
         'Model'             : 0,
-        # 's'                 : 100,
-        # 's' in the construction of  absorption probability
-        # if s = -1 and Model == 1, non zero elements in each row equals to the original adjacency matrix
-        'absorption_type'   : 'binary',     # When Model == 1, the new constructed adjacency matrix is either 'binary' or 'weighted'
-        'mu'                : 1,          # 'mu' in the Model5
-        't'                 : 500,           # In model9, top 't' nodes will be reserved.
-        't2'                : 100,          # In model 21
-        'lambda'            : 0,
-        'Model11'           : 'nearest',     # 'weighted' | 'nearest'
-        'k'                 : -1,           # k in model 11. if k<0, then it is determined by program.
         'Model_to_add_label': { 'Model' :0 }, # for model 16
         'Model_to_predict'  : { 'Model' :0 }, # for model 16
         'Model19'           : 'union',        # 'union' | 'intersection'
-        'classifier'        : 'svm',            # 'svm' | 'tree' | 'cnn'
-        'svm_kernel'        : 'rbf',        # 'rbf' | 'poly' | 'rbf' | 'sigmoid', model 23
-        'gamma'             : 1e-5,         # gamma for svm, see scikit-learn document, model 23
-        'svm_degree'        : 4,
-        'tree_depth'        : None,
+        'alpha'             : 1e-6,
 
         'connection'        : 'cc',
         # A string contains only char "c" or "f" or "d".
@@ -74,7 +39,7 @@ configuration ={
         # "d" stands for dense net.
         # See layer_size for details.
 
-        'layer_size'        : [256],
+        'layer_size'        : [16],
         # A list or any sequential object. Describe the size of each layer.
         # e.g. "--connection ccd --layer_size [7,8]"
         #     This combination describe a network as follow:
@@ -84,25 +49,9 @@ configuration ={
         'dropout'           : 0.5,          # 'Dropout rate (1 - keep probability).'
         'weight_decay'      : 5e-4,         # 'Weight for L2 loss on embedding matrix.'
 
-        'early_stopping'    : 0,
-        # 'Tolerance for early stopping (# of epochs).
-        # Non positive value means never early stop.'
-
         'random_seed'       : int(time.time()),     #'Random seed.'
         'feature'           : 'bow',        # 'bow' | 'tfidf' | 'none'.
 
-        'smoothing'         : None,        # 'poly'| 'ap'  | 'taubin' | 'test21' | 'test21_norm' | None
-        'alpha'             : 1e-6,         # 'alpha' in the construction of  absorption probability
-        'beta'              : 10,
-        'poly_parameters'   : [1,-2,1],           # coefficients of p(L_rw)
-        'taubin_lambda'     : 0.3,
-        'taubin_mu'         : -0.31,
-        'taubin_repeat'     : 5,
-        'taubin_f'          : 0.7,
-        'taubin_t'          : 0.5,
-
-        'logging'           : False,         # 'Weather or not to record log'
-        'logdir'            : None,           # 'Log directory.''
         'model_dir'         : './model/',
         'name'              : None,           # 'name of the model. Serve as an ID of model.'
         # if logdir or name are empty string,
@@ -111,279 +60,31 @@ configuration ={
 
         'threads'           : 2*cpu_count(),  #'Number of threads'
         'train'             : True,
-        'drop_inter_class_edge': False,
-        'loss_func'         :'default',     #'imbalance', 'triplet'
-        'ws_beta'           : 20,
-        'max_triplet':1000  #for triplet, 1000 for cora to get all tripets
     },
 
     # The list of model to be train.
     # Only configurations that's different with default are specified here
     'model_list':
     [
-        # # GCN
-        # {
-        #     'Model'     :0,
-        #     'connection': 'cc',
-        # },
-        # # LP
-        # {
-        #     'Model': 17,
-        #     'alpha': 1e-6,
-        # },
-        # MLP
         {
-            'Model'     :0,
-            'connection': 'ff',
+            'Model'     : 'GCN',
         },
-    ]+[
-        # {
-        #     'Model'     :23,
-        #     'classifier': 'cnn',
-        # }
-    ]
-    +[
         {
-            'Model'     :23,
-            'classifier': 'cnn',
-
-            'smoothing': 'taubin',
-            'taubin_lambda': 1,
-            'taubin_mu': 0,
-            'taubin_repeat': repeat,
-        } for repeat in [10]#[2,4,6,8,10,]
+            'Model'     : 'cotraining',
+        },
+        {
+            'Model'     : 'selftraining',
+        },
+        {
+            'Model'     : 'lp',
+        },
+        {
+            'Model'     : 'union',
+        },
+        {
+            'Model'     : 'intersection',
+        },
     ]
-    # +[
-    #     {
-    #         'Model'     :23,
-    #         'classifier': 'cnn',
-    #
-    #         'smoothing': 'taubin',
-    #         'taubin_lambda': 0.5,
-    #         'taubin_mu': 0,
-    #         'taubin_repeat': repeat,
-    #     } for repeat in [20]#[4,8,12,16,20]
-    # ]
-    # +[
-    #     {
-    #         'Model'     :23,
-    #         'classifier': 'cnn',
-    #
-    #         'smoothing': 'ap_appro',
-    #         'alpha': alpha,
-    #     } for alpha in [0.05]#[0.05, 0.08, 0.1, 0.2]
-    # ]
-    # +[
-    #     {
-    #         'Model'     :0,
-    #         'connection': 'ff',
-    #
-    #         'smoothing': 'taubin',
-    #         'taubin_lambda': 1,
-    #         'taubin_mu': 0,
-    #         'taubin_repeat': repeat,
-    #     } for repeat in [10]#[2,3,4,5,6,7,8,9,10]
-    # ]
-    # +[
-    #     {
-    #         'Model'     :0,
-    #         'connection': 'ff',
-    #
-    #         'smoothing': 'taubin',
-    #         'taubin_lambda': 0.5,
-    #         'taubin_mu': 0,
-    #         'taubin_repeat': repeat,
-    #     } for repeat in [4,6,8,10,12,14,16,18,20]
-    # ]
-    # +[
-    #     {
-    #         'Model'     :0,
-    #         'connection': 'ff',
-    #
-    #         'smoothing': 'ap_appro',
-    #         'alpha': alpha,
-    #     } for alpha in [0.02, 0.03, 0.05, 0.1, 0.2, 0.3, 0.5]
-    # ]
-    # +[
-    #     # SVM
-    #     {
-    #         'Model'     :23,
-    #         'classifier': 'svm',  # 'svm' | 'tree' | 'cnn'
-    #         'svm_kernel': 'rbf',  # 'rbf' | 'poly' | 'rbf' | 'sigmoid', model 23
-    #         'gamma': 0.1,  # gamma for svm, see scikit-learn document, model 23
-    #         'svm_degree': 4,
-    #     },
-    #     {
-    #         'Model'     :23,
-    #         'classifier': 'svm',  # 'svm' | 'tree' | 'cnn'
-    #         'svm_kernel': 'rbf',  # 'rbf' | 'poly' | 'rbf' | 'sigmoid', model 23
-    #         'gamma': 0.1,  # gamma for svm, see scikit-learn document, model 23
-    #         'svm_degree': 4,
-    #
-    #         'smoothing': 'sparse_encoding',
-    #     },
-    #     {
-    #         'Model'     :23,
-    #         'classifier': 'svm',  # 'svm' | 'tree' | 'cnn'
-    #         'svm_kernel': 'rbf',  # 'rbf' | 'poly' | 'rbf' | 'sigmoid', model 23
-    #         'gamma': 0.1,  # gamma for svm, see scikit-learn document, model 23
-    #         'svm_degree': 4,
-    #
-    #         'smoothing': 'taubin',
-    #         'taubin_lambda': 1,
-    #         'taubin_mu': 0,
-    #         'taubin_repeat': 5,
-    #     },
-    #     {
-    #         'Model'     :23,
-    #         'classifier': 'svm',  # 'svm' | 'tree' | 'cnn'
-    #         'svm_kernel': 'rbf',  # 'rbf' | 'poly' | 'rbf' | 'sigmoid', model 23
-    #         'gamma': 0.1,  # gamma for svm, see scikit-learn document, model 23
-    #         'svm_degree': 4,
-    #
-    #         'smoothing': 'taubin',
-    #         'taubin_lambda': 0.5,
-    #         'taubin_mu': 0,
-    #         'taubin_repeat': 10,
-    #     },
-    #     {
-    #         'Model'     :23,
-    #         'classifier': 'svm',  # 'svm' | 'tree' | 'cnn'
-    #         'svm_kernel': 'rbf',  # 'rbf' | 'poly' | 'rbf' | 'sigmoid', model 23
-    #         'gamma': 0.1,  # gamma for svm, see scikit-learn document, model 23
-    #         'svm_degree': 4,
-    #
-    #         'smoothing': 'ap_appro',
-    #         'alpha'    : 0.1
-    #     },
-    #
-    #
-    #     # Tree
-    #     {
-    #         'Model'     :23,
-    #         'classifier': 'tree',  # 'svm' | 'tree' | 'cnn'
-    #         'tree_depth': None,
-    #     },
-    #     {
-    #         'Model'     :23,
-    #         'classifier': 'tree',  # 'svm' | 'tree' | 'cnn'
-    #         'tree_depth': None,
-    #
-    #         'smoothing': 'sparse_encoding',
-    #     },
-    #     {
-    #         'Model'     :23,
-    #         'classifier': 'tree',  # 'svm' | 'tree' | 'cnn'
-    #         'tree_depth': None,
-    #
-    #         'smoothing': 'taubin',
-    #         'taubin_lambda': 1,
-    #         'taubin_mu': 0,
-    #         'taubin_repeat': 5
-    #     },
-    #     {
-    #         'Model'     :23,
-    #         'classifier': 'tree',  # 'svm' | 'tree' | 'cnn'
-    #         'tree_depth': None,
-    #
-    #         'smoothing': 'taubin',
-    #         'taubin_lambda': 0.5,
-    #         'taubin_mu': 0,
-    #         'taubin_repeat': 10
-    #     },
-    #     {
-    #         'Model'     :23,
-    #         'classifier': 'tree',  # 'svm' | 'tree' | 'cnn'
-    #         'tree_depth': None,
-    #
-    #         'smoothing': 'ap_appro',
-    #         'alpha'    : 0.1
-    #     },
-    #
-    #     # MLP
-    #     {
-    #          'Model'     :0,
-    #          'connection': 'ff',
-    #          'layer_size': [16],
-    #     },
-    #     {
-    #         'Model'     :0,
-    #         'connection': 'ff',
-    #         'layer_size': [16],
-    #
-    #         'smoothing': 'sparse_encoding',
-    #     },
-    #     {
-    #         'Model'     :0,
-    #         'connection': 'ff',
-    #         'layer_size': [16],
-    #
-    #         'smoothing': 'taubin',
-    #         'taubin_lambda': 1,
-    #         'taubin_mu': 0,
-    #         'taubin_repeat': 5
-    #     },
-    #     {
-    #         'Model'     :0,
-    #         'connection': 'ff',
-    #         'layer_size': [16],
-    #
-    #         'smoothing': 'taubin',
-    #         'taubin_lambda': 0.5,
-    #         'taubin_mu': 0,
-    #         'taubin_repeat': 10
-    #     },
-    #     {
-    #         'Model'     :0,
-    #         'connection': 'ff',
-    #         'layer_size': [16],
-    #
-    #         'smoothing': 'ap_appro',
-    #         'alpha'    : 0.1
-    #     },
-    #
-    #     # MLP
-    #     {
-    #         'Model'     :0,
-    #         'connection': 'f',
-    #         'layer_size': [],
-    #     },
-    #     {
-    #         'Model'     :0,
-    #         'connection': 'f',
-    #         'layer_size': [],
-    #
-    #         'smoothing': 'sparse_encoding',
-    #     },
-    #     {
-    #         'Model'     :0,
-    #         'connection': 'f',
-    #         'layer_size': [],
-    #
-    #         'smoothing': 'taubin',
-    #         'taubin_lambda': 1,
-    #         'taubin_mu': 0,
-    #         'taubin_repeat': 5
-    #     },
-    #     {
-    #         'Model'     :0,
-    #         'connection': 'f',
-    #         'layer_size': [],
-    #
-    #         'smoothing': 'taubin',
-    #         'taubin_lambda': 0.5,
-    #         'taubin_mu': 0,
-    #         'taubin_repeat': 10,
-    #     },
-    #     {
-    #         'Model'     :0,
-    #         'connection': 'f',
-    #         'layer_size': [],
-    #
-    #         'smoothing': 'ap_appro',
-    #         'alpha'    : 0.1,
-    #     },
-    # ]
 }
 
 # Parse args
@@ -394,9 +95,6 @@ parser.add_argument("-v", "--verbose", action="store_true")
 parser.add_argument("--dataset", type=str)
 parser.add_argument("--train_size", type=str)
 parser.add_argument("--repeating", type=int)
-parser.add_argument("--validate", type=bool, help='0 | 1')
-parser.add_argument("--loss_func", type=str)
-parser.add_argument("--ws_beta", type=int)
 
 args = parser.parse_args()
 print(args)
@@ -406,12 +104,6 @@ if args.train_size is not None:
     configuration['default']['train_size'] = eval(args.train_size)
 if args.repeating is not None:
     configuration['repeating']=args.repeating
-if args.validate is not None:
-    configuration['default']['validate']=args.validate
-if args.loss_func is not None:
-    configuration['default']['loss_func']=args.loss_func
-if args.ws_beta is not None:
-    configuration['default']['ws_beta']=args.ws_beta
 pprint.PrettyPrinter(indent=4).pprint(configuration)
 # exit()
 
