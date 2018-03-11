@@ -1,9 +1,7 @@
 from gcn.layers import DenseNet, GraphConvolution, Residual, FullyConnected, ConvolutionDenseNet
 from gcn.metrics import masked_accuracy, masked_softmax_cross_entropy, weighted_softmax_cross_entropy, triplet_softmax_cross_entropy
 import tensorflow as tf
-import numpy as np
 from copy import copy
-import random
 
 class GCN_MLP(object):
     def __init__(self, model_config, placeholders, input_dim):

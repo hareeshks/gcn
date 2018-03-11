@@ -3,15 +3,11 @@ from __future__ import print_function
 
 import time
 import tensorflow as tf
-from tensorflow.python.client import timeline
 import numpy as np
 from scipy import sparse
-from sklearn import svm, tree
-from os import path
 from gcn.utils import construct_feed_dict, preprocess_adj, chebyshev_polynomials, \
     load_data, sparse_to_tuple, cotraining, selftraining, lp, union_intersection
 from gcn.models import GCN_MLP
-import cnn
 
 from config import configuration, args
 
