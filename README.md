@@ -3,7 +3,7 @@
 This is a implementation of algorithms for semi-supervised classification mentioned in our paper: 
 
 Qimai Li, Zhichao Han, Xiao-Ming Wu, [Deeper Insights into Graph Convolutional Networks for Semi-Supervised Learning](https://arxiv.org/abs/1801.07606) (AAAI 2018)
-
+[BLOG](http://liqimai.github.io/blog/AAAI-18/)
 ## Requirements
 * Python 3
 * tensorflow
@@ -18,7 +18,7 @@ python train.py
 
 ## Configuration
 
-See `config.py` for details.
+See `config.py` for details. If you encounter any problem, please open an issue in this github page.
 
 ## Cite
 
