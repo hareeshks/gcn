@@ -10,6 +10,7 @@ import scipy.linalg as linalg
 from scipy.sparse.linalg.eigen.arpack import eigsh
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.preprocessing import normalize
+from sklearn.neighbors import NearestNeighbors
 import sys
 from os import path
 import copy
@@ -99,9 +100,10 @@ def get_triplet(y_train, train_mask, max_triplets):
     np_triple = np.concatenate(np.array([triplet]), axis = 1)
     return np_triple
 
-def load_data(dataset_str, train_size, validation_size, model_config, shuffle=True):
+def load_data(dataset_str, train_size, validation_size, model_config, shuffle=True, repeat_state=None):
     """Load data."""
-    if dataset_str in ['USPS-Fea', 'CIFAR-Fea', 'Cifar_10000_fea', 'Cifar_R10000_fea', 'MNIST-Fea', 'MNIST-10000', 'MNIST-5000']:
+    if dataset_str in ['USPS-Fea', 'CIFAR-Fea', 'Cifar_10000_fea', 'Cifar_R10000_fea', 'MNIST-Fea',
+                       'MNIST-10000', 'MNIST-5000', 'USPS-2-100', 'USPS-2-10']:
         data = sio.loadmat('data/{}.mat'.format(dataset_str))
         l = data['labels'].flatten()
         labels = np.zeros([l.shape[0],np.max(data['labels'])+1])
@@ -124,6 +126,16 @@ def load_data(dataset_str, train_size, validation_size, model_config, shuffle=Tr
         test_idx_reorder = parse_index_file("data/ind.{}.test.index".format(dataset_str))
         test_idx_range = np.sort(test_idx_reorder)
 
+        # if dataset_str == 'citeseer':
+        #     # Fix citeseer dataset (there are some isolated nodes in the graph)
+        #     # Find isolated nodes, add them as zero-vecs into the right position
+        #     test_idx_range_full = range(min(test_idx_reorder), max(test_idx_reorder) + 1)
+        #     tx_extended = sp.lil_matrix((len(test_idx_range_full), x.shape[1]))
+        #     tx_extended[test_idx_range - min(test_idx_range), :] = tx
+        #     tx = tx_extended
+        #     ty_extended = np.zeros((len(test_idx_range_full), y.shape[1]))
+        #     ty_extended[test_idx_range - min(test_idx_range), :] = ty
+        #     ty = ty_extended
         if dataset_str == 'citeseer':
             # Fix citeseer dataset (there are some isolated nodes in the graph)
             # Find isolated nodes, add them as zero-vecs into the right position
@@ -131,7 +143,9 @@ def load_data(dataset_str, train_size, validation_size, model_config, shuffle=Tr
             tx_extended = sp.lil_matrix((len(test_idx_range_full), x.shape[1]))
             tx_extended[test_idx_range - min(test_idx_range), :] = tx
             tx = tx_extended
-            ty_extended = np.zeros((len(test_idx_range_full), y.shape[1]))
+            ty_extended = np.zeros((len(test_idx_range_full), y.shape[1] - 1))
+            ty_extended_ = np.ones((len(test_idx_range_full), 1))  # add dummy labels
+            ty_extended = np.hstack([ty_extended, ty_extended_])
             ty_extended[test_idx_range - min(test_idx_range), :] = ty
             ty = ty_extended
 
@@ -181,46 +195,79 @@ def load_data(dataset_str, train_size, validation_size, model_config, shuffle=Tr
 
     # split the data set
     idx = np.arange(len(labels))
-    no_class = labels.shape[1]  # number of class
-    # validation_size = validation_size * len(idx) // 100
-    # if not hasattr(train_size, '__getitem__'):
-    train_size = [train_size for i in range(labels.shape[1])]
     if shuffle:
         np.random.shuffle(idx)
-    idx_train = []
-    count = [0 for i in range(no_class)]
-    label_each_class = train_size
-    next = 0
-    for i in idx:
-        if count == label_each_class:
-            break
-        next += 1
-        for j in range(no_class):
-            if labels[i, j] and count[j] < label_each_class[j]:
-                idx_train.append(i)
-                count[j] += 1
-
     test_size = model_config['test_size']
-    if model_config['validate']:
-        if test_size:
-            assert next+validation_size<len(idx)
-        idx_val = idx[next:next+validation_size]
-        assert next+validation_size+test_size < len(idx)
-        idx_test = idx[-test_size:] if test_size else idx[next+validation_size:]
+    if isinstance(train_size, int):
+        assert train_size>0, "train size must bigger than 0."
+        no_class = labels.shape[1]  # number of class
+        train_size = [train_size for i in range(labels.shape[1])]
+        idx_train = []
+        count = [0 for i in range(no_class)]
+        label_each_class = train_size
+        next = 0
+        for i in idx:
+            if count == label_each_class:
+                break
+            next += 1
+            for j in range(no_class):
+                if labels[i, j] and count[j] < label_each_class[j]:
+                    idx_train.append(i)
+                    count[j] += 1
+                    break
 
+        if model_config['validate']:
+            if test_size:
+                assert next+validation_size<len(idx)
+            assert next < len(idx), "Too many train data, no data left for validation."
+            idx_val = idx[next:next+validation_size]
+            next = next+validation_size
+            assert next+test_size < len(idx)
+            assert next < len(idx), "Too many train and validation data, no data left for testing."
+            idx_test = idx[-test_size:] if test_size else idx[next+validation_size:]
+        else:
+            if test_size:
+                assert next+test_size<len(idx)
+            assert next < len(idx), "Too many train data, no data left for testing."
+            idx_val = idx[-test_size:] if test_size else idx[next:]
+            idx_test = idx[-test_size:] if test_size else idx[next:]
     else:
+        # train
+        assert isinstance(train_size, float)
+        assert 0<train_size<1, "float train size must be between 0-1"
+        labels_of_class = [0]
+        train_size = int(len(idx) * train_size)
+        next = 0
+        while (np.prod(labels_of_class) == 0):
+            np.random.shuffle(idx)
+            idx_train = idx[next:next+train_size]
+            labels_of_class = np.sum(labels[idx_train], axis=0)
+        next = train_size
+
+        # validate
+        if model_config['validate']:
+            assert isinstance(validation_size, float)
+            validation_size = int(len(idx) * validation_size)
+            idx_val = idx[next: next+validation_size]
+            next += validation_size
+        else:
+            idx_val = idx[next:]
+
+        # test
         if test_size:
-            assert next+test_size<len(idx)
-        idx_val = idx[-test_size:] if test_size else idx[next:]
-        idx_test = idx[-test_size:] if test_size else idx[next:]
-    # else:
-    #     labels_of_class = [0]
-    #     while (np.prod(labels_of_class) == 0):
-    #         np.random.shuffle(idx)
-    #         idx_train = idx[0:int(len(idx) * train_size // 100)]
-    #         labels_of_class = np.sum(labels[idx_train], axis=0)
-    #     idx_val = idx[-500 - validation_size:-500]
-    #     idx_test = idx[-500:]
+            assert isinstance(test_size, float)
+            test_size = int(len(idx) * test_size)
+            idx_test = idx[next: next+test_size]
+        else:
+            idx_test = idx[next:]
+
+    if dataset_str in ['USPS-2-100', 'USPS-2-10']:
+        assert model_config['validate'] == False
+        splits = data['idxLabs'].shape[0]
+        k = repeat_state%splits if shuffle else np.random.randint(splits)
+        idx_train = data['idxLabs'][k]
+        idx_test = data['idxUnls'][k]
+
     print('labels of each class : ', np.sum(labels[idx_train], axis=0))
     # idx_val = idx[len(idx) * train_size // 100:len(idx) * (train_size // 2 + 50) // 100]
     # idx_test = idx[len(idx) * (train_size // 2 + 50) // 100:len(idx)]
@@ -979,26 +1026,43 @@ def smooth(features, adj, smoothing, model_config, stored_A=None):
             new_feature = L.dot(new_feature) + a * features
         return new_feature
     elif smoothing == 'ap':
-        return Model22(adj, features, model_config['alpha'], stored_A)
+        return Model22(adj, features, model_config['smooth_alpha'], stored_A)
     elif smoothing == 'taubin':
         return taubin_smoothing(adj, model_config['taubin_lambda'], model_config['taubin_mu'], model_config['taubin_repeat'], features)
     elif smoothing == 'ap_appro':
-        k = int(np.ceil(4/model_config['alpha']))
-        return ap_approximate(adj, features, model_config['alpha'], k)
+        k = int(np.ceil(4/model_config['smooth_alpha']))
+        return ap_approximate(adj, features, model_config['smooth_alpha'], k)
     elif smoothing == 'test21':
-        smoothor = Test21(adj, model_config['alpha'], model_config['beta'], stored_A)
+        smoothor = Test21(adj, model_config['smooth_alpha'], model_config['beta'], stored_A)
         features = smoothor * features
         if sp.issparse(features):
             features = features.toarray()
         return features
     elif smoothing == 'test21_norm':
-        smoothor = Test21(adj, model_config['alpha'], model_config['beta'], stored_A)
+        smoothor = Test21(adj, model_config['smooth_alpha'], model_config['beta'], stored_A)
         features = sp.csr_matrix(smoothor * features)
         return normalize(features, norm='l1', axis=1, copy=False)
     elif smoothing == 'test27':
-        return Test27(adj, features, model_config['alpha'], model_config['beta'], stored_A)
+        return Test27(adj, features, model_config['smooth_alpha'], model_config['beta'], stored_A)
+    elif smoothing == 'manifold_denoising':
+        return md(adj, features, model_config['smooth_alpha'], model_config['k'], model_config['md_repeat'])
     else:
         raise ValueError("smoothing must be one of 'poly' | 'ap' | 'taubin' | 'test21' | 'test27' ")
+
+
+def construct_knn_graph(features, k):
+    nbrs = NearestNeighbors(n_neighbors=5).fit(features)
+    adj = nbrs.kneighbors_graph()
+    adj = adj + adj.T
+    adj[adj != 0] = 1
+    return adj
+
+def md(adj, features, alpha, k, repeat):
+    for i in range(repeat):
+        features = ap_approximate(adj, features, alpha, int(np.ceil(4/alpha)))
+        adj = construct_knn_graph(features, k)
+    return adj
+
 
 def sparse_encoding(features, adj, stored):
 
@@ -1239,7 +1303,7 @@ def correct_label_count(indicator, i):
     print(count, '/', total, sep='', end='\t')
 
 
-def construct_feed_dict(features, support, labels, labels_mask, triplet, placeholders):
+def construct_feed_dict(features, support, labels, labels_mask, triplet, noise_sigma, placeholders):
     """Construct feed dictionary."""
     feed_dict = dict()
     feed_dict.update({placeholders['labels']: labels})
@@ -1247,6 +1311,7 @@ def construct_feed_dict(features, support, labels, labels_mask, triplet, placeho
     feed_dict.update({placeholders['features']: features})
     feed_dict.update({placeholders['support'][i]: support[i] for i in range(len(support))})
     feed_dict.update({placeholders['num_features_nonzero']: features[1].shape})
+    feed_dict.update({placeholders['noise_sigma']: noise_sigma})
     if len(triplet):
         feed_dict.update({placeholders['triplet']:triplet})
     return feed_dict
@@ -1308,15 +1373,15 @@ def preprocess_model_config(model_config):
                 model_name += '_validate'
 
         if model_config['smoothing'] == 'ap':
-            model_name += '_' + 'ap_smoothing' + '_' + str(model_config['alpha'])
+            model_name += '_' + 'ap_smoothing' + '_' + str(model_config['smooth_alpha'])
         if model_config['smoothing'] == 'ap_appro':
-            model_name += '_' + 'ap_appro' + '_' + str(model_config['alpha'])
+            model_name += '_' + 'ap_appro' + '_' + str(model_config['smooth_alpha'])
         elif model_config['smoothing'] == 'test21':
-            model_name += '_' + 'test21' + '_' + str(model_config['alpha']) + '_' + str(model_config['beta'])
+            model_name += '_' + 'test21' + '_' + str(model_config['smooth_alpha']) + '_' + str(model_config['beta'])
         elif model_config['smoothing'] == 'test21_norm':
-            model_name += '_' + 'test21_norm' + '_' + str(model_config['alpha']) + '_' + str(model_config['beta'])
+            model_name += '_' + 'test21_norm' + '_' + str(model_config['smooth_alpha']) + '_' + str(model_config['beta'])
         elif model_config['smoothing'] == 'test27':
-            model_name += '_' + 'test27' + '_' + str(model_config['alpha']) + '_' + str(model_config['beta'])
+            model_name += '_' + 'test27' + '_' + str(model_config['smooth_alpha']) + '_' + str(model_config['beta'])
         elif model_config['smoothing'] == 'poly':
             model_name += '_' + 'poly_smoothing'
             for a in model_config['poly_parameters']:
@@ -1327,10 +1392,15 @@ def preprocess_model_config(model_config):
                           + '_' + str(model_config['taubin_repeat'])
         elif model_config['smoothing'] == 'sparse_encoding':
             model_name += '_sparse_encoding'
+        elif model_config['smoothing'] is 'manifold_denoising':
+            model_name += '_manifold_denoising' + '_' + str(model_config['smooth_alpha']) + '_' + str(model_config['md_repeat'])
         elif model_config['smoothing'] is None:
             pass
         else:
             raise ValueError('invalid smoothing')
+
+        if model_config['smoothing'] is not None and model_config['Model'] == 17:
+            model_name += '_' + str(model_config['k'])
 
         model_name += '_Model' + str(model_config['Model'])
         

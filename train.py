@@ -11,14 +11,15 @@ from os import path
 from gcn.utils import construct_feed_dict, preprocess_features, drop_inter_class_edge,\
     preprocess_adj, chebyshev_polynomials, load_data, sparse_to_tuple, \
     Model1, Model2, Model3, Model4, Model5, Model6, Model7, Model8, Model9, \
-    Model10, Model11, Model12, Model16, Model17, Model19, Model20, Model22, taubin_smoothor, smooth, Model26, Test21, Model28
+    Model10, Model11, Model12, Model16, Model17, Model19, Model20, Model22, taubin_smoothor, \
+    smooth, Model26, Test21, Model28, construct_knn_graph
 from gcn.models import GCN_MLP
 import cnn
-
+import pprint
 from config import configuration, args
 
 
-def train(model_config, sess, seed, data_split = None):
+def train(model_config, sess, seed, repeat_state, data_split = None):
     # Print model_config
     very_begining = time.time()
     print('',
@@ -46,7 +47,7 @@ def train(model_config, sess, seed, data_split = None):
         adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask, size_of_each_class, triplet = \
             load_data(model_config['dataset'],train_size=model_config['train_size'],
                       validation_size=model_config['validation_size'],
-                      model_config=model_config, shuffle=model_config['shuffle'])
+                      model_config=model_config, shuffle=model_config['shuffle'], repeat_state=repeat_state)
         stored_A = model_config['dataset']
         if model_config['drop_inter_class_edge']:
             adj = drop_inter_class_edge(adj)
@@ -143,7 +144,11 @@ def train(model_config, sess, seed, data_split = None):
               'logging        : {}'.format(model_config['logging']),
               sep='\n')
     elif model_config['Model'] == 17:
-        stored_A = stored_A + '_A_I'
+        if model_config['smoothing'] is not None:
+            stored_A = None
+            adj = construct_knn_graph(features, model_config['k'])
+        else:
+            stored_A = stored_A + '_A_I'
         if model_config['drop_inter_class_edge']:
             stored_A = None
         test_acc, test_acc_of_class, prediction = Model17(adj, model_config['alpha'], y_train, train_mask, y_test,
@@ -226,16 +231,19 @@ def train(model_config, sess, seed, data_split = None):
             ''' 11, 12, 13, 14, 15, 16, 17, 18], but is {} now'''.format(model_config['Model']))
 
     # Some preprocessing
-    if sparse.issparse(features):
-        if model_config['connection'] == ['f' for i in range(len(model_config['connection']))]:
-            train_features = sparse_to_tuple(features[train_mask])
-            val_features = sparse_to_tuple(features[val_mask])
-            test_features = sparse_to_tuple(features[test_mask])
-        features = sparse_to_tuple(features)
-    else:
+    if model_config['connection'] == ['f' for i in range(len(model_config['connection']))]:
         train_features = features[train_mask]
         val_features = features[val_mask]
         test_features = features[test_mask]
+    else:
+        train_features = features
+        val_features = features
+        test_features = features
+    if sparse.issparse(features):
+            train_features = sparse_to_tuple(train_features)
+            val_features = sparse_to_tuple(val_features)
+            test_features = sparse_to_tuple(test_features)
+            features = sparse_to_tuple(features)
 
     if model_config['Model'] == 12:
         if model_config['k'] < 0:
@@ -289,14 +297,16 @@ def train(model_config, sess, seed, data_split = None):
         # helper variable for sparse dropout
         'laplacian' : tf.SparseTensor(indices=np.vstack([laplacian.row, laplacian.col]).transpose()
                                       , values=laplacian.data, dense_shape=laplacian.shape),
-        'triplet': tf.placeholder(tf.int32, name='triplet', shape=(None, None))
+        'triplet': tf.placeholder(tf.int32, name='triplet', shape=(None, None)),
+        'noise_sigma': tf.placeholder(tf.float32, name='noise_sigma'),
+        'noise'     : tf.sparse_placeholder(tf.float32, name='features') if isinstance(features, tf.SparseTensorValue) else tf.placeholder(tf.float32, shape=[None, features.shape[1]], name='features')
     }
     if model_config['Model'] in [11, 13, 14, 15]:
         placeholders['label_per_sample'] = tf.placeholder(tf.float32, name='label_per_sample', shape=(None, label_per_sample.shape[1]))
         placeholders['sample2label'] = tf.placeholder(tf.float32, name='sample2label', shape=(label_per_sample.shape[1], y_train.shape[1]))
 
     # Create model
-    model = GCN_MLP(model_config, placeholders, input_dim=features[2][1])
+    model = GCN_MLP(model_config, placeholders, input_dim=train_features[2][1])
 
     # Random initialize
     sess.run(tf.global_variables_initializer())
@@ -309,20 +319,21 @@ def train(model_config, sess, seed, data_split = None):
     # Construct feed dictionary
     if model_config['connection'] == ['f' for i in range(len(model_config['connection']))]:
         train_feed_dict = construct_feed_dict(
-            train_features, support,
-            y_train[train_mask], np.ones(train_mask.sum(), dtype=np.bool), triplet, placeholders)
+            train_features, support, y_train[train_mask], np.ones(train_mask.sum(), dtype=np.bool),
+            triplet, model_config['noise_sigma'], placeholders)
         train_feed_dict.update({placeholders['dropout']: model_config['dropout']})
         valid_feed_dict = construct_feed_dict(
-            val_features, support,
-            y_val[val_mask], np.ones(val_mask.sum(), dtype=np.bool), triplet, placeholders)
+            val_features, support, y_val[val_mask],
+            np.ones(val_mask.sum(), dtype=np.bool), triplet, 0, placeholders)
         test_feed_dict = construct_feed_dict(
-            test_features, support,
-            y_test[test_mask], np.ones(test_mask.sum(), dtype=np.bool), triplet, placeholders)
+            test_features, support, y_test[test_mask],
+            np.ones(test_mask.sum(), dtype=np.bool), triplet, 0, placeholders)
     else:
-        train_feed_dict = construct_feed_dict(features, support, y_train, train_mask, triplet, placeholders)
+        train_feed_dict = construct_feed_dict(train_features, support, y_train, train_mask,
+                                              triplet, model_config['noise_sigma'], placeholders)
         train_feed_dict.update({placeholders['dropout']: model_config['dropout']})
-        valid_feed_dict = construct_feed_dict(features, support, y_val, val_mask, triplet, placeholders)
-        test_feed_dict = construct_feed_dict(features, support, y_test, test_mask, triplet, placeholders)
+        valid_feed_dict = construct_feed_dict(val_features, support, y_val, val_mask, triplet, 0, placeholders)
+        test_feed_dict = construct_feed_dict(test_features, support, y_test, test_mask, triplet, 0, placeholders)
 
     if model_config['Model'] in [11, 13, 14, 15]:
         train_feed_dict.update({placeholders['label_per_sample']: label_per_sample})
@@ -355,7 +366,8 @@ def train(model_config, sess, seed, data_split = None):
                                               model_config['alpha'], stored_A)
                 if model_config['Model'] == 21:
                     y_train, train_mask = Model16(prediction, model_config['t2'], y_train, train_mask)
-                train_feed_dict = construct_feed_dict(features, support, y_train, train_mask, placeholders)
+                train_feed_dict = construct_feed_dict(features, support, y_train, train_mask,
+                                                      model_config['noise_sigma'], placeholders)
                 train_feed_dict.update({placeholders['dropout']: model_config['dropout']})
                 max_valid_acc = 0
                 max_train_acc = 0
@@ -373,6 +385,15 @@ def train(model_config, sess, seed, data_split = None):
                     f.write(timeline.Timeline(run_metadata.step_stats).generate_chrome_trace_format())
             else:
                 t = time.time()
+                if isinstance(train_features, tf.SparseTensorValue):
+                    train_feed_dict.update({placeholders['features']:
+                        tf.SparseTensorValue(train_features.indices,
+                                             train_features.values + np.random.normal(0,
+                                                    model_config['noise_sigma'], train_features.indices.shape[0]),
+                                             train_features.dense_shape)})
+                else:
+                    train_feed_dict.update({placeholders['features']:
+                        train_features+np.random.normal(0,model_config['noise_sigma'],train_features.shape)})
                 sess.run(model.opt_op, feed_dict=train_feed_dict)
                 t = time.time()-t
             timer += t
@@ -464,7 +485,7 @@ if __name__ == '__main__':
                 tf.set_random_seed(seed)
                 with tf.Session(config=tf.ConfigProto(
                         intra_op_parallelism_threads=model_config['threads'])) as sess:
-                    test_acc, test_acc_of_class, prediction, size_of_each_class, t = train(model_config, sess, seed)
+                    test_acc, test_acc_of_class, prediction, size_of_each_class, t = train(model_config, sess, seed, r)
                     acc[i].append(test_acc)
                     acc_of_class[i].append(test_acc_of_class)
                     duration[i].append(t)
@@ -476,6 +497,7 @@ if __name__ == '__main__':
     duration = np.mean(duration, axis=1)
     # print mean, standard deviation, and model name
     print()
+    pprint.pprint(acc)
     print("REPEAT\t{}".format(configuration['repeating']))
     print("{:<8}\t{:<8}\t{:<8}\t{:<8}\t{:<8}\t{:<8}\t{:<8}".format('DATASET', 'train_size', 'valid_size', 'RESULTS', 'STD', 'TRAIN_TIME', 'NAME'))
     for model_config, acc_mean, acc_std, t in zip(configuration['model_list'], acc_means, acc_stds, duration):

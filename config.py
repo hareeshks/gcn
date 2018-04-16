@@ -34,11 +34,15 @@ configuration ={
 
     # The default model configuration
     'default':{
-        'dataset'           : 'MNIST-Fea',     # 'Dataset string. (cora | citeseer | pubmed | CIFAR-Fea | Cifar_10000_fea | Cifar_R10000_fea | USPS-Fea | MNIST-Fea | MNIST-10000)'
+        # 'Dataset string.
+        # (cora | citeseer | pubmed
+        #   | CIFAR-Fea | Cifar_10000_fea | Cifar_R10000_fea | USPS-Fea | MNIST-Fea | MNIST-10000
+        #   | USPS-2-100 | USPS-2-10)'
+        'dataset'           : 'cora',
         'shuffle'           : True,
         'train_size'        : 20,         # if train_size is a number, then use TRAIN_SIZE labels per class.
         # 'train_size'        : [20 for i in range(10)], # if train_size is a list of numbers, then it specifies training labels for each class.
-        'validation_size'   : 500,           # 'Use VALIDATION_SIZE data to train model'
+        'validation_size'   : None,           # 'Use VALIDATION_SIZE data to train model'
         'validate'          : False,        # Whether use validation set
         'test_size'         : None,         # If None, all rest are test set
         'conv'              : 'gcn',        # 'conv type. (gcn | cheby | chebytheta | gcn_rw | taubin | test21 | gcn_unnorm | gcn_noloop)'
@@ -57,7 +61,7 @@ configuration ={
         't2'                : 100,          # In model 21
         'lambda'            : 0,
         'Model11'           : 'nearest',     # 'weighted' | 'nearest'
-        'k'                 : -1,           # k in model 11. if k<0, then it is determined by program.
+        'k'                 : 10,           # k in model 11. if k<0, then it is determined by program.
         'Model_to_add_label': { 'Model' :0 }, # for model 16
         'Model_to_predict'  : { 'Model' :0 }, # for model 16
         'Model19'           : 'union',        # 'union' | 'intersection'
@@ -74,7 +78,7 @@ configuration ={
         # "d" stands for dense net.
         # See layer_size for details.
 
-        'layer_size'        : [256],
+        'layer_size'        : [16],
         # A list or any sequential object. Describe the size of each layer.
         # e.g. "--connection ccd --layer_size [7,8]"
         #     This combination describe a network as follow:
@@ -91,8 +95,10 @@ configuration ={
         'random_seed'       : int(time.time()),     #'Random seed.'
         'feature'           : 'bow',        # 'bow' | 'tfidf' | 'none'.
 
-        'smoothing'         : None,        # 'poly'| 'ap'  | 'taubin' | 'test21' | 'test21_norm' | None
-        'alpha'             : 1e-6,         # 'alpha' in the construction of  absorption probability
+        'alpha': 1e-6,  # 'alpha' in the construction of  absorption probability for model 17
+
+        'smoothing'         : None,        # 'poly'| 'ap'  | 'taubin' | 'test21' | 'test21_norm' | None | 'manifold_denoising'
+        'smooth_alpha'      : 0.1,
         'beta'              : 10,
         'poly_parameters'   : [1,-2,1],           # coefficients of p(L_rw)
         'taubin_lambda'     : 0.3,
@@ -112,30 +118,78 @@ configuration ={
         'threads'           : 2*cpu_count(),  #'Number of threads'
         'train'             : True,
         'drop_inter_class_edge': False,
-        'loss_func'         :'default',     #'imbalance', 'triplet'
+        'loss_func'         :'default',     # 'default', 'imbalance', 'triplet'
         'ws_beta'           : 20,
-        'max_triplet':1000  #for triplet, 1000 for cora to get all tripets
+        'max_triplet':1000,  #for triplet, 1000 for cora to get all tripets
+
+        #ladder
+        'noise_sigma'       :0,
     },
 
     # The list of model to be train.
     # Only configurations that's different with default are specified here
     'model_list':
     [
-        # # GCN
+        # # LP
         # {
-        #     'Model'     :0,
-        #     'connection': 'cc',
+        #     'Model': 17,
+        #     'alpha': 1e-6,
+        #
+        #     'smoothing': 'manifold_denoising',
+        #     'smooth_alpha': 0.7,
+        #     'md_repeat'   : 3,
+        # },
+
+        # # LP
+        # {
+        #     'Model': 17,
+        #     'alpha': 1e-6,
+        #
+        #     'smoothing': 'taubin',
+        #     'taubin_lambda': 1,
+        #     'taubin_mu': 0,
+        #     'taubin_repeat': 10,
         # },
         # # LP
         # {
         #     'Model': 17,
         #     'alpha': 1e-6,
+        #
+        #     'smoothing': 'taubin',
+        #     'taubin_lambda': 0.5,
+        #     'taubin_mu': 0,
+        #     'taubin_repeat': 20,
         # },
-        # MLP
+        # # LP
+        # {
+        #     'Model': 17,
+        #     'alpha': 1e-6,
+        #
+        #     'smoothing': 'ap_appro',
+        #     'smooth_alpha': 0.01,
+        # },
+    ]
+    +[
+        # GCN
         {
-            'Model'     :0,
-            'connection': 'ff',
+            'Model'     : 0,
+            'connection': 'cc',
         },
+        # # LP
+        # {
+        #     'Model': 17,
+        #     'alpha': 1e-6,
+        # },
+        # # MLP
+        # {
+        #     'Model'     :0,
+        #     'connection': 'ff',
+        # },
+        # {
+        #     'Model'     :0,
+        #     'connection': 'ff',
+        #     'noise_sigma':0.02,
+        # },
     ]+[
         # {
         #     'Model'     :23,
@@ -143,15 +197,16 @@ configuration ={
         # }
     ]
     +[
-        {
-            'Model'     :23,
-            'classifier': 'cnn',
-
-            'smoothing': 'taubin',
-            'taubin_lambda': 1,
-            'taubin_mu': 0,
-            'taubin_repeat': repeat,
-        } for repeat in [10]#[2,4,6,8,10,]
+        # {
+        #     'Model'     :23,
+        #     'classifier': 'cnn',
+        #     'learning_rate' : 0.003,
+        #
+        #     'smoothing': 'taubin',
+        #     'taubin_lambda': 1,
+        #     'taubin_mu': 0,
+        #     'taubin_repeat': repeat,
+        # } for repeat in [10]#[2,4,6,8,10,]
     ]
     # +[
     #     {
@@ -182,7 +237,7 @@ configuration ={
     #         'taubin_lambda': 1,
     #         'taubin_mu': 0,
     #         'taubin_repeat': repeat,
-    #     } for repeat in [10]#[2,3,4,5,6,7,8,9,10]
+    #     } for repeat in [2]#[2,3,4,5,6,7,8,9,10]
     # ]
     # +[
     #     {
@@ -212,15 +267,6 @@ configuration ={
     #         'svm_kernel': 'rbf',  # 'rbf' | 'poly' | 'rbf' | 'sigmoid', model 23
     #         'gamma': 0.1,  # gamma for svm, see scikit-learn document, model 23
     #         'svm_degree': 4,
-    #     },
-    #     {
-    #         'Model'     :23,
-    #         'classifier': 'svm',  # 'svm' | 'tree' | 'cnn'
-    #         'svm_kernel': 'rbf',  # 'rbf' | 'poly' | 'rbf' | 'sigmoid', model 23
-    #         'gamma': 0.1,  # gamma for svm, see scikit-learn document, model 23
-    #         'svm_degree': 4,
-    #
-    #         'smoothing': 'sparse_encoding',
     #     },
     #     {
     #         'Model'     :23,
@@ -269,13 +315,6 @@ configuration ={
     #         'classifier': 'tree',  # 'svm' | 'tree' | 'cnn'
     #         'tree_depth': None,
     #
-    #         'smoothing': 'sparse_encoding',
-    #     },
-    #     {
-    #         'Model'     :23,
-    #         'classifier': 'tree',  # 'svm' | 'tree' | 'cnn'
-    #         'tree_depth': None,
-    #
     #         'smoothing': 'taubin',
     #         'taubin_lambda': 1,
     #         'taubin_mu': 0,
@@ -311,13 +350,6 @@ configuration ={
     #         'connection': 'ff',
     #         'layer_size': [16],
     #
-    #         'smoothing': 'sparse_encoding',
-    #     },
-    #     {
-    #         'Model'     :0,
-    #         'connection': 'ff',
-    #         'layer_size': [16],
-    #
     #         'smoothing': 'taubin',
     #         'taubin_lambda': 1,
     #         'taubin_mu': 0,
@@ -347,13 +379,6 @@ configuration ={
     #         'Model'     :0,
     #         'connection': 'f',
     #         'layer_size': [],
-    #     },
-    #     {
-    #         'Model'     :0,
-    #         'connection': 'f',
-    #         'layer_size': [],
-    #
-    #         'smoothing': 'sparse_encoding',
     #     },
     #     {
     #         'Model'     :0,

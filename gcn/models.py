@@ -85,6 +85,9 @@ class GCN_MLP(object):
             self._accuracy_of_class()
         tf.summary.scalar('accuracy', self.accuracy)
 
+        # # required by tf.layers.batch_normalization
+        # with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
+        #     self.opt_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
         self.opt_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
         self.summary = tf.summary.merge_all(tf.GraphKeys.SUMMARIES)
 
@@ -128,7 +131,6 @@ class GCN_MLP(object):
             elif self.model_config['loss_func'] == 'triplet':
                     self.loss += triplet_softmax_cross_entropy(self.outputs, self.placeholders['labels'], self.placeholders['triplet'],
                                                              self.placeholders['labels_mask'], self.model_config['MARGIN'], self.model_config['triplet_lamda'])
-                                                 
             else:
                 self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
                                                       self.placeholders['labels_mask'])

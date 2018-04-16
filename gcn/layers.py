@@ -129,6 +129,13 @@ class FullyConnected(Layer):
         # transform
         output = dot(x, self.vars['weights'], sparse=self.sparse_inputs)
 
+        # batch_norm
+        # output = tf.layers.batch_normalization(output,
+        #                               axis=1,
+        #                               center=True,
+        #                               scale=True,
+        #                               training=True)
+
         # bias
         if self.bias:
             output += self.vars['bias']
@@ -206,6 +213,12 @@ class GraphConvolution(Layer):
             output = dot(H, dot(x, self.vars['weight'], sparse=self.sparse_inputs), sparse=True)
         else:
             output = tf.add_n(supports)
+
+        # output = tf.layers.batch_normalization(output,
+        #                               axis=1,
+        #                               center=True,
+        #                               scale=True,
+        #                               training=True)
 
         # bias
         if self.bias:
