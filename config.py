@@ -22,7 +22,8 @@ configuration ={
         'test_size'         : None,         # If None, all rest are test set
         'conv'              : 'gcn',        # 'conv type. (gcn | cheby | chebytheta | gcn_rw | taubin | test21 | gcn_unnorm | gcn_noloop)'
         'max_degree'        : 2,            # 'Maximum Chebyshev polynomial degree.'
-        'learning_rate'     : 0.01,         # 'Initial learning rate.'
+        #'learning_rate'     : 0.01,         # 'Initial learning rate.'
+        'learning_rate'     : 0.02,         # 'updated learning rate.'
         'epochs'            : 200,          # 'Number of epochs to train.'
 
         # config the absorption probability
